@@ -33,6 +33,9 @@ const messages = [
   message("3", "user", "Исправление: нужно 60 мест. Этот пакет подойдёт?"),
 ];
 const documentFollowUp = "Подготовьте черновик КП для продления на 65 рабочих станций.";
+const installationQuestion = "Лицензия видна в аккаунте, но при установке не удалось скачать файл. Что делать?";
+const promotionQuestion = "У производителя есть специальные условия для небольших компаний. Вы можете подтвердить скидку?";
+const privatePurchaseQuestion = "Я самозанятый без ИП. Могу купить электронную лицензию как физлицо? Продукт ещё не выбрал.";
 const endpoint = "http://localhost/api/chat";
 const post = (body: unknown) => POST(new Request(endpoint, { method: "POST", body: JSON.stringify(body) }));
 
@@ -72,6 +75,9 @@ globalThis.fetch = async (input, init) => {
   chatCalls++;
   const body = await request.json() as { messages: Array<{ role: string; content: string }>; tool_choice?: string; tools?: unknown[] };
   const system = body.messages.filter(turn => turn.role === "system").map(turn => turn.content).join("\n");
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(installationQuestion))) {
+    return stream({ content: "Уточните, какой продукт и версию устанавливаете и на какой ОС." }, "stop");
+  }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(documentFollowUp))) {
     if (body.messages.some(turn => turn.role === "tool")) {
       return stream({ content: "Для подходящей позиции можно скачать черновик КП." }, "stop");
@@ -85,6 +91,14 @@ globalThis.fetch = async (input, init) => {
     assert.match(system, /Юрлица и ИП могут платить банковским переводом/);
     assert.match(system, /https:\/\/store\.softline\.ru\/delivery_info\//);
     return stream({ content: "Да, магазин принимает банковский перевод от юрлиц и ИП." }, "stop");
+  }
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(promotionQuestion))) {
+    return stream({ content: "Уточните, пожалуйста, продукт и редакцию." }, "stop");
+  }
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(privatePurchaseQuestion))) {
+    assert.match(system, /часть лицензий предназначена только для организаций/iu);
+    assert.match(system, /запроси название или артикул/iu);
+    return stream({ content: "Купить как физлицо можно, если условия позиции это допускают. Уточните название или артикул." }, "stop");
   }
   const tool = body.messages.findLast(turn => turn.role === "tool");
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes("будет 20 узлов"))) {
@@ -181,6 +195,19 @@ globalThis.fetch = async (input, init) => {
     assert.ok(!body.tools?.length || body.tool_choice === "none");
     assert.match(system, /расширение действующей подписки без идентификатора/);
     return stream({ content: "Для расширения на пять станций нужно сверить артикул и срок действующей подписки." }, "stop");
+  }
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes("SNS-8.x-BK1-SB-SP1Y"))) {
+    if (tool) {
+      const { offers } = JSON.parse(tool.content);
+      const exact = offers.length && offers.every(({ article }: { article: string }) => article === "SNS-8.x-BK1-SB-SP1Y");
+      return stream({ content: exact
+        ? "Найден точный артикул: электронная лицензия на год. Условия договора для школы надо уточнить у менеджера."
+        : "Артикул не нашёлся. Есть только другая позиция для Linux." }, "stop");
+    }
+    return stream({ tool_calls: [{
+      index: 0, id: "fixture_known_school_article", type: "function",
+      function: { name: "searchCatalog", arguments: '{"query":"Secret Net Studio 8 Максимальная защита"}' },
+    }] }, "tool_calls");
   }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes("2048 активов"))) {
     assert.match(system, /Активы и IP-адреса — разные условия лицензирования/);
@@ -476,6 +503,13 @@ try {
   assert.match(alternativesStream, /"toolName":"searchCatalog"/);
   assert.match(alternativesStream, /По указанному артикулу совпадений в снимке каталога нет/);
   assert.match(alternativesStream, /Цену и наличие подтвердить не удалось/);
+  const knownSchoolArticle = await post({ messages: [message("known-school-article", "user",
+    "Мы школа. Можно ли купить через договор Secret Net Studio 8 «Максимальная защита», электронная лицензия на год, артикул SNS-8.x-BK1-SB-SP1Y?")] });
+  assert.equal(knownSchoolArticle.status, 200);
+  const schoolArticleStream = await knownSchoolArticle.text();
+  assert.match(schoolArticleStream, /Найден точный артикул: электронная лицензия на год/);
+  for (const id of ["505189", "505190", "505191", "505192"]) assert.match(schoolArticleStream, new RegExp(`"id":"${id}"`));
+  assert.doesNotMatch(schoolArticleStream, /не нашёлся|для Linux|"type":"(?:tool-output-error|error)"/);
   const concurrent = await post({ messages: [message("concurrent", "user", "Для ContentReader PDF 16 рассматриваем 300 одновременных подключений. Сколько стоит?")] });
   const concurrentStream = await concurrent.text();
   assert.match(concurrentStream, /Конкурентная лицензия есть в снимке каталога/);
@@ -530,6 +564,18 @@ try {
   }]);
   assert.equal(chatCalls - previousChatCalls, 2);
   assert.equal(decisionCalls - previousDecisionCalls, 1);
+  const installation = await post({ messages: [message("installation-failure", "user", installationQuestion)] });
+  const installationStream = await installation.text();
+  assert.match(installationStream, /какой продукт и версию/);
+  assert.match(installationStream, /официальный сайт производителя/);
+  const promotion = await post({ messages: [message("promotion-check", "user", promotionQuestion)] });
+  const promotionStream = await promotion.text();
+  assert.match(promotionStream, /продукт и редакцию/);
+  assert.match(promotionStream, /условий программы и конкретного артикула/);
+  const purchase = await post({ messages: [message("private-purchase", "user", privatePurchaseQuestion)] });
+  const purchaseStream = await purchase.text();
+  assert.match(purchaseStream, /если условия позиции это допускают/);
+  assert.doesNotMatch(purchaseStream, /Не удалось закончить подбор/);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;

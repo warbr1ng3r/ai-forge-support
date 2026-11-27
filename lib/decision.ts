@@ -109,10 +109,10 @@ const institution = String.raw`(?:образовательн|бюджетн|го
 const institutionalBuyer = new RegExp(String.raw`${buyerContext}(?:${school}|${institution})(?!\p{L})`, "u");
 
 function readBuyer(text: string) {
-  if (/(?:как|для)\s+(?:физ\.?\s*лиц[аоу]|физическ(?:ое|ого|ому)\s+лиц[аоу])(?!\p{L})/u.test(text)) return "person";
   if (/(?:^|[^\p{L}])самозанят\p{L}*(?!\p{L})/u.test(text) && !/(?:как|в качестве)\s+ип(?!\p{L})/u.test(text)) {
     return "self-employed";
   }
+  if (/(?:как|для)\s+(?:физ\.?\s*лиц[аоу]|физическ(?:ое|ого|ому)\s+лиц[аоу])(?!\p{L})/u.test(text)) return "person";
   if (commercialBuyer.test(text)) return "commercial";
   if (institutionalBuyer.test(text)) return "institution";
 }

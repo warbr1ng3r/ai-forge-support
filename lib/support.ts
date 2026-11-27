@@ -68,9 +68,15 @@ export function createSupport(
   const buyerTurns = readUserTurns(requirements);
   const buyerText = buyerTurns.join("\n");
   const latestBuyer = buyerTurns.at(-1) ?? "";
+  const installationIssue = /не (?:запуска|устанавлива|(?:удалось|уда[её]тся) скачать)|ошибк\p{L}* (?:при )?установк/iu.test(latestBuyer);
   const academicPrice = /академическ\p{L}*\s+(?:цен|скидк)/iu.test(latestBuyer);
+  const asksPromotionalDiscount = !academicPrice && /скидк|специальн\p{L}*\s+услови/iu.test(latestBuyer);
+  const discountTerms = "Право на скидку и её размер зависят от условий программы и конкретного артикула. Подтвердить условия покупки поможет менеджер магазина.";
   const nodeQuantity = Number(latestBuyer.match(/(?<!\d)([1-9]\d{0,5})\s+уз(?:ел|ла|лов)(?!\p{L})/iu)?.[1]);
-  const exactArticle = latestBuyer.match(/артикул\s+([a-z0-9][a-z0-9-]{3,})(?!\p{L})/iu)?.[1];
+  const [articleMatch, anotherArticle] = latestBuyer.matchAll(
+    /(?<!\p{L})артикул(?:а|у|е|ом)?(?:\s*[:№]\s*|\s+)[«"]?([a-z0-9][a-z0-9._-]{2,98}[a-z0-9])(?![\p{L}\p{N}_-])/gu,
+  );
+  const exactArticle = anotherArticle ? undefined : articleMatch?.[1];
   const needsExpansionDetails = isSubscriptionExpansion(buyerTurns)
     && !/(?:артикул|sku|код позиции|номер договора)\s*[:№]?\s*(?:[a-z0-9][a-z0-9-]{4,}|\d{4,})/i.test(buyerText);
   let knowledge = "";
@@ -121,6 +127,10 @@ export function createSupport(
   const matchesSearchScope = (offer: Offer) => matchesProductScope(offer)
     && !(wantsPrimaryScanner && /сканер[-– ]вс/i.test(offer.name)
       && /в комплекте лицензий|включает компонент/i.test(offer.name));
+  const articleOffers = exactArticle && /[a-z]/u.test(exactArticle) && /\d/u.test(exactArticle)
+    ? items.find(exactArticle).filter(offer => normalizeSearch(offer.article) === exactArticle && matchesProductScope(offer))
+    : [];
+  const firstArticleOffers = () => !found.size && articleOffers.length ? articleOffers : undefined;
   const withEvidence = (offer: ReturnType<typeof items.search>[number], units?: number) => {
     const notes = [securityProductEvidence(offer), /\bbusiness basic\b.*(?:advanced (?:compliance|threat protection)|data loss prevention|extra file storage)/i.test(offer.name)
       ? "Дополнение к Microsoft 365 Business Basic. Срок и число мест относятся к дополнению. Базовая лицензия в состав не входит."
@@ -160,8 +170,8 @@ export function createSupport(
 Если запрос перечисляет несколько независимых групп товаров, используй один searchCatalogBatch. В label сохрани название, версию, количество и срок каждой группы, включая сроки словами «на год» и «на месяц». Срок, указанный для одного товара, не переноси на другие группы. В queries передай короткие названия продуктов без условий договора и количества. Ответь отдельно по каждой группе, включая пустые результаты. Отдельный электронный ключ не доказывает наличие корпоративной поставки. Для проверки наличия всего списка не делай verifyFit и повторные findOffer по каждому артикулу.
 Если нужные условия недостаточно ясны, задай в одном сообщении один-два вопроса, которые меняют выбор. Например, при общей задаче защиты почты и файлов сначала уточни угрозы и инфраструктуру. Дождись ответа клиента, затем ищи. Не повторяй уже отвеченные вопросы.
 Условия покупки физлицом, ИП или самозанятым сверяй по конкретной позиции. Если статус покупателя или правила для него неизвестны, не делай общего вывода о доступности продукта для такого покупателя.
-${buyer === "self-employed" ? "Самозанятый без ИП оформляет покупку как физлицо, если позиция для него доступна. Банковский перевод по реквизитам только для юрлиц и ИП, независимо от товара. Для физлица при доступной покупке — банковская карта. Если продукт неизвестен, уточни его." : ""}
-${institutionalPurchase ? "Карточка с типом организации «Коммерческая» подтверждает свойства лицензии. Условия поставки для этого учреждения по такой карточке не подтверждены. Скажи об этом сразу и предложи сверку с менеджером. Не называй эту позицию подходящей и не обещай договор или черновик для неё." : ""}
+${buyer === "self-employed" ? "На общий вопрос начни с правила: самозанятый без ИП может оформить покупку как физлицо, если это допускает конкретная лицензия. Магазин обслуживает физлиц, но часть лицензий предназначена только для организаций. Не обобщай доступность на все продукты. Физлицо платит картой, банковский перевод по реквизитам доступен только юрлицам и ИП. Если продукт неизвестен, запроси название или артикул для проверки." : ""}
+${institutionalPurchase ? "Называй только те типы организаций, которые явно указаны в найденной карточке. Если указан только коммерческий тип, карточка подтверждает свойства лицензии, а условия поставки для учреждения нужно сверить с менеджером. Не называй такую позицию подходящей и не обещай договор или черновик. Если указан академический или государственный тип, сохрани эти данные и вынеси условия конкретного договора на сверку." : ""}
 ${drWebEducation ? drWebEducationFacts : ""}
 ${contentReader ? contentReaderLicensingFacts : ""}
 ${cryptoArmWorkplace ? "У бессрочных позиций КриптоАРМ ГОСТ на одно рабочее место это количество указано в названиях. Ищи по тексту «КриптоАРМ ГОСТ бессрочная на одном рабочем месте», без числового фильтра users. Проверь каждую версию и условия по её карточке." : ""}
@@ -205,7 +215,8 @@ ${wantsLinuxProtection
     : "Для защиты сервера на Linux сначала уточни дистрибутив с версией и нужный уровень защиты (файлы или сеть), если эти данные ещё неизвестны. Не подбирай Windows или почтовые продукты для защиты Linux."
   : /(почт|exchange|файл)/i.test(requirements) && /(защит|антивирус|фишинг|шифровальщик)/i.test(requirements) ? securitySearchNotes : ""}
 С вопросами о сервисах Softline можешь направить в https://docs.softline.com/ru-ru, не приписывая справочнику непроверенные факты.
-${/не (?:запуска|устанавлива|удалось скачать)|ошибк\p{L}* (?:при )?установк/iu.test(buyerTurns.at(-1) ?? "") ? "При ошибке установки уточни продукт, версию и ОС. За дистрибутивом направляй только на официальный сайт производителя. Не предлагай загрузку по ссылке из письма с ключом и запуск от имени администратора, пока продукт и инструкция производителя не известны. Сетевые ограничения, защиту и права на рабочем устройстве помогает проверить ИТ-поддержка." : ""}
+${installationIssue ? "При ошибке установки уточни продукт, версию, ОС и обезличенный текст ошибки. Вместе с уточнениями дай безопасный первый шаг. Для сверки системных требований и повторной загрузки установщика укажи официальный сайт производителя. Не предлагай загрузку по ссылке из письма с ключом и запуск от имени администратора, пока продукт и инструкция производителя не известны. Сетевые ограничения, защиту и права на рабочем устройстве помогает проверить ИТ-поддержка." : ""}
+${asksPromotionalDiscount ? `${discountTerms} При необходимости уточни продукт или редакцию. Условия производителя не гарантируют скидку у продавца.` : ""}
 Ты консультируешь в демо. Если клиент просит проект КП или счёта по выбранной позиции, сверь её соответствие через verifyFit. Кнопка «Демо-КП и счёт» есть у доступной по снимку, подходящей позиции с ценой. При недоступности или пустой цене направь за подтверждением в магазин. Официальные документы оформляет магазин. Для сложного вопроса можно предложить кнопку «Передать менеджеру» в демо. Не утверждай, что заказ оформлен, официальный счёт выставлен или обращение уже передано.
 `,
     tools: {
@@ -219,7 +230,7 @@ ${/не (?:запуска|устанавлива|удалось скачать)|
           months: z.number().int().positive().optional().describe("Известный срок лицензии в месяцах"),
         }),
         execute: async ({ query, users, operation, months }) => {
-          const offers = items.search(searchQuery(query), users, operation, months);
+          const offers = firstArticleOffers() ?? items.search(searchQuery(query), users, operation, months);
           const matches = !offers.length && cryptoArmWorkplace && /криптоарм/i.test(query) && (users === 1 || users === undefined)
             ? items.search("КриптоАРМ ГОСТ бессрочная на одном рабочем месте", undefined, operation, months) : offers;
           return remember(matches.filter(offer => matchesSearchScope(offer) && !(wantsStandardCsp && isCspTls(offer.name))), users);
@@ -236,7 +247,8 @@ ${/не (?:запуска|устанавлива|удалось скачать)|
           maxPrice: z.number().positive().optional().describe("Предел цены за позицию в рублях, а не бюджет всего комплекта"),
         }),
         execute: async ({ queries, users, operation, months, maxPrice }) =>
-          remember(items.discover(queries.map(astraSearch), { users, operation, months, maxPrice }).filter(matchesSearchScope), users),
+          remember((firstArticleOffers() ?? items.discover(queries.map(astraSearch), { users, operation, months, maxPrice }))
+            .filter(matchesSearchScope), users),
       }),
       searchCatalogBatch: createTool({
         id: "searchCatalogBatch",
@@ -292,7 +304,7 @@ ${/не (?:запуска|устанавлива|удалось скачать)|
         description: "Получить параметры и описание конкретного SKU по ID или артикулу.",
         inputSchema: z.object({ id: z.string().trim().min(1).max(100) }),
         execute: async ({ id }) => {
-          const offers = items.find(id).filter(matchesProductScope);
+          const offers = firstArticleOffers() ?? items.find(id).filter(matchesProductScope);
           if (!offers.length && buyerText.includes(normalizeSearch(id))) missingRequestedOffer ??= normalizeSearch(id);
           return remember(offers);
         },
@@ -344,6 +356,12 @@ ${/не (?:запуска|устанавлива|удалось скачать)|
     verifiedOffers: () => verifiedOffers,
     catalogConstraintReply: () => constraintReply,
     answerNotes: (answer: string) => [
+      installationIssue && !/официальн\p{L}*\s+(?:сайт|поддержк)/iu.test(answer)
+        && "Сверьте системные требования для вашей версии. Если нужно скачать установщик заново, используйте официальный сайт производителя.",
+      asksPromotionalDiscount && (
+        !/(?:услови|правил)\p{L}*(?:\s+\p{L}+){0,2}\s+(?:программ|акци)/iu.test(answer)
+        || !/артикул|\bsku\b|конкретн\p{L}*\s+позици/iu.test(answer)
+      ) && discountTerms,
       asksRedCheckLicenseOnly && !(/носител|медиакомплект/i.test(answer) && /поддерж/i.test(answer))
         && "Для расчёта берём цену права использования сканера. Носитель и отдельная техподдержка — отдельные позиции, их стоимость в такой расчёт не входит.",
       academicPrice && (!/подтвержд|документ/iu.test(answer) || !/менеджер|карточк|каталог/iu.test(answer))
