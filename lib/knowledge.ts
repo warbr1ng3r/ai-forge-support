@@ -64,3 +64,18 @@ export function recordConsultation(tools: readonly string[], verified: readonly 
     complete ? "Ответ завершён" : "Ответ прерван", JSON.stringify({ tools, learned }), time,
   );
 }
+
+export function recordSupportEvent(action: string, details: { offerId?: string; count?: number; handoffId?: string }) {
+  db().prepare("INSERT INTO support_events (action, details, createdAt) VALUES (?, ?, ?)")
+    .run(action, JSON.stringify(details), new Date().toISOString());
+}
+
+export function knowledgeOverview() {
+  const store = db();
+  return {
+    facts: store.prepare("SELECT id, title, fact, source, kind, updatedAt FROM knowledge_facts ORDER BY updatedAt DESC LIMIT 30").all() as Fact[],
+    events: store.prepare("SELECT id, action, details, createdAt FROM support_events ORDER BY id DESC LIMIT 20").all() as Array<{
+      id: number; action: string; details: string; createdAt: string;
+    }>,
+  };
+}

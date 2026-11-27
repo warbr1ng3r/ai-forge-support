@@ -5,6 +5,7 @@ import { ChevronDownIcon } from "lucide-react"
 import { z } from "zod"
 import { cn } from "@/lib/utils"
 
+import { CommerceDocuments } from "./commerce-documents"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent } from "./ui/card"
@@ -55,7 +56,7 @@ function catalogLink(value: string) {
   }
 }
 
-export function ProductCandidates({ parts }: { parts: UIMessage["parts"] }) {
+export function ProductCandidates({ parts, allowDocuments = false }: { parts: UIMessage["parts"]; allowDocuments?: boolean }) {
   const found = new Map<string, z.infer<typeof offerSchema>>()
   const assessments = new Map<string, keyof typeof verdicts>()
   for (const part of parts) {
@@ -123,6 +124,7 @@ export function ProductCandidates({ parts }: { parts: UIMessage["parts"] }) {
                   )}
                   {!verdict && assessments.size > 0 && <Badge variant="outline">Соответствие не проверено</Badge>}
                 </div>
+                {allowDocuments && verdict === "fit" && <CommerceDocuments offer={offer} />}
               </CardContent>
             </Card>
           </li>

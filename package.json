@@ -14,7 +14,8 @@
     "catalog:import": "node scripts/import-catalog.ts",
     "catalog:check": "node scripts/check-catalog.ts",
     "chat:check": "node scripts/check-chat.ts",
-    "decision:check": "node scripts/check-decision.ts"
+    "decision:check": "node scripts/check-decision.ts",
+    "product:check": "node scripts/check-documents.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.94",

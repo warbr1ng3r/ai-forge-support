@@ -34,7 +34,7 @@ export const ChatMessage = memo(function ChatMessage({
   return (
     <Message align="start" role="group" aria-label="Помощник">
       <MessageContent>
-        <ProductCandidates parts={message.parts} />
+        <ProductCandidates parts={message.parts} allowDocuments={Boolean(onRetry)} />
         {answer && <TextPart part={{ text: answer }} />}
         {answer && onRetry && (
           <MessageFooter className="px-0">
