@@ -83,7 +83,8 @@ globalThis.fetch = async (input, init) => {
 
   assert.equal(request.url, "https://polza.ai/api/v1/chat/completions");
   chatCalls++;
-  const body = await request.json() as { messages: Array<{ role: string; content: string }>; tool_choice?: string; tools?: unknown[] };
+  const body = await request.json() as { messages: Array<{ role: string; content: string }>; tool_choice?: string; tools?: unknown[]; max_tokens?: number };
+  assert.equal(body.max_tokens, 2048, "Bound the provider's per-call balance reservation");
   const system = body.messages.filter(turn => turn.role === "system").map(turn => turn.content).join("\n");
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(installationQuestion))) {
     return stream({ content: "Уточните, какой продукт и версию устанавливаете и на какой ОС." }, "stop");

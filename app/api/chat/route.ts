@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       params: {
         messages, maxSteps: 4, abortSignal: signal,
         stopWhen: () => Boolean(catalogGroups() || catalogConstraintReply()),
-        modelSettings: { timeout: { stepMs: 18_000, totalMs: 36_000 } },
+        modelSettings: { maxOutputTokens: 2048, timeout: { stepMs: 18_000, totalMs: 36_000 } },
         prepareStep: ({ stepNumber, systemMessages }) => {
           if (stepNumber === 0 && needsExpansionDetails) return {
             activeTools: [],
