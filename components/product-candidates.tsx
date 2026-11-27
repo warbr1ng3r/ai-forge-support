@@ -92,7 +92,7 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
     .slice(0, maxOffers)
   const label = found.size === 1 ? "Позиция из каталога" : `Позиции из каталога · ${found.size}`
   const cards = (shown: typeof offers) => (
-    <ul className={shown.length > 1 ? "grid min-w-0 gap-3 md:grid-cols-2" : "min-w-0"}>
+    <ul className={cn("grid min-w-0 items-start gap-3", shown.length > 1 && "md:grid-cols-2")}>
       {shown.map((offer) => {
         const url = catalogLink(offer.url)
         const currency = offer.currency === "RUR" || offer.currency === "RUB" ? "₽" : offer.currency
@@ -103,8 +103,8 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
 
         return (
           <li key={offer.id} className="min-w-0">
-            <Card className={cn("h-full rounded-xl py-0 shadow-none", verdict === "fit" && "bg-fit-surface ring-fit/30")}>
-              <CardContent className="flex h-full flex-col gap-2 px-4 py-4">
+            <Card size="sm" className={cn("rounded-xl border py-0 shadow-none ring-0", verdict === "fit" && "border-fit/30 bg-fit-surface")}>
+              <CardContent className="flex min-w-0 flex-col gap-2 px-3 py-3 sm:px-4 sm:py-4">
                 {url ? (
                   <a href={url} target="_blank" rel="noopener noreferrer" className="text-[15px] leading-snug font-semibold wrap-anywhere text-foreground underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-current">
                     {offer.name}
@@ -121,13 +121,13 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
                     offer.maxUsers && `До ${offer.maxUsers} польз.`,
                   ].filter(Boolean).join(" · ")}
                 </p>
-                <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-                  <span className="text-base font-semibold tabular-nums">{price}</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
+                  <span className="min-w-0 text-base font-semibold tabular-nums wrap-anywhere">{price}</span>
                   {!offer.availableInCatalog && <Badge variant="outline">Недоступно</Badge>}
                   {verdict && (
                     <Badge
                       variant={verdict === "unknown" ? "outline" : "secondary"}
-                      className={cn("h-auto min-h-5 max-w-full text-wrap", verdict === "fit" && "bg-card text-fit", verdict === "contradiction" && "bg-danger-surface text-destructive")}
+                      className={cn("h-auto min-h-5 max-w-full whitespace-normal", verdict === "fit" && "bg-card text-fit", verdict === "contradiction" && "bg-danger-surface text-destructive")}
                     >
                       {verdicts[verdict]}
                     </Badge>
@@ -145,7 +145,7 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
   )
 
   return (
-    <section className="mb-4 min-w-0 space-y-2" aria-label={label}>
+    <section className="mb-2 min-w-0 space-y-2.5" aria-label={label}>
       <p className="text-sm font-medium text-muted-foreground">{label}</p>
       {cards(offers.slice(0, 2))}
       {offers.length > 2 && (

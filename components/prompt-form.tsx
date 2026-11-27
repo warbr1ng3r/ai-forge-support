@@ -40,7 +40,7 @@ export function PromptForm({
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-1.5">
-      <p id={demoNoticeId} className="px-1 text-xs text-muted-foreground">
+      <p id={demoNoticeId} className="text-xs text-muted-foreground">
         Демо на каталоге Softline. Вводите только вымышленные данные.
       </p>
       <InputGroup className="rounded-xl border-input bg-card has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-ring">
@@ -61,7 +61,7 @@ export function PromptForm({
             }
           }}
         />
-        <InputGroupAddon align="inline-end" className="self-end p-1 has-[>button]:mr-0">
+        <InputGroupAddon align="inline-end" className="shrink-0 p-1 has-[>button]:mr-0">
           {isBusy ? (
             <InputGroupButton
               type="button"

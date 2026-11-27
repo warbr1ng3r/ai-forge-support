@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <TooltipProvider>
             <div className="flex h-dvh min-w-0 flex-col">
-              <header className="shrink-0 border-b border-border bg-card">
+              <header className="chat-gutter shrink-0 overflow-hidden border-b border-border bg-card">
                 <div className="chat-column flex min-h-14 items-center justify-between gap-2 py-1">
                   <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">

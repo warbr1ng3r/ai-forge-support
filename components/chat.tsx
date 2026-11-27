@@ -161,10 +161,12 @@ export function Chat() {
           : status === "ready" && lastMessage?.role === "assistant" ? "Ответ готов" : ""}
       </p>
       {hasMessages && (
-        <div className="chat-column flex shrink-0 justify-end pt-1">
-          <Button type="button" variant="ghost" size="sm" disabled={isBusy} onClick={startNewChat} className="pointer-coarse:min-h-11">
-            Новый подбор
-          </Button>
+        <div className="chat-gutter shrink-0 overflow-hidden">
+          <div className="chat-column flex justify-end py-1">
+            <Button type="button" variant="ghost" size="sm" disabled={isBusy} onClick={startNewChat} className="pointer-coarse:min-h-11">
+              Новый подбор
+            </Button>
+          </div>
         </div>
       )}
       <MessageScrollerProvider>
@@ -203,7 +205,7 @@ export function Chat() {
               </MessageScrollerContent>
             </MessageScrollerViewport>
           ) : (
-            <div className="min-h-0 overflow-y-auto">
+            <div className="chat-gutter min-h-0 overflow-y-auto">
               <section className="chat-column space-y-3 pt-4 pb-3 sm:pt-10 sm:pb-5 lg:pt-16" aria-labelledby="welcome-title">
                 <div className="grid min-w-0 overflow-hidden rounded-2xl border bg-card lg:grid-cols-[0.95fr_1.05fr]">
                   <div className="flex flex-col justify-center gap-3 bg-[#1e2c52] p-4 text-[#f3f5ff] max-sm:[@media(max-height:650px)]:gap-2 max-sm:[@media(max-height:650px)]:p-3 sm:gap-4 sm:p-8 dark:bg-[#253657]">
@@ -223,27 +225,33 @@ export function Chat() {
               </section>
             </div>
           )}
-          <div className="chat-column flex shrink-0 items-end gap-2 pb-3 sm:pb-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              {error && (
-                <Alert variant="destructive" role="alert">
-                  <AlertTitle>Ошибка при обработке запроса</AlertTitle>
-                  <AlertDescription>{errorText(error.message)}</AlertDescription>
-                  {hasMessages && (
-                    <Button type="button" variant="outline" size="sm" className="mt-2 justify-self-start pointer-coarse:min-h-11" onClick={retry}>
-                      Повторить запрос
-                    </Button>
-                  )}
-                </Alert>
-              )}
-              <PromptForm isBusy={isBusy} onSubmit={send} onStop={() => void stop()} input={draft} setInput={setDraft} inputRef={inputRef} />
-            </div>
+          <div className="relative shrink-0">
             {hasMessages && (
-              <MessageScrollerButton
-                aria-label="К последнему сообщению"
-                className="static size-11 shrink-0 translate-none data-[active=false]:hidden"
-              />
+              <div className="chat-gutter pointer-events-none absolute inset-x-0 bottom-full z-10 overflow-hidden">
+                <div className="chat-column flex justify-end py-2">
+                  <MessageScrollerButton
+                    aria-label="К последнему сообщению"
+                    className="static size-11 shrink-0 translate-none border shadow-sm data-[active=false]:hidden data-[active=true]:pointer-events-auto"
+                  />
+                </div>
+              </div>
             )}
+            <div className="chat-gutter overflow-hidden">
+              <div className="chat-column flex flex-col gap-2 pt-1 pb-3 sm:pb-4">
+                {error && (
+                  <Alert variant="destructive" role="alert">
+                    <AlertTitle>Ошибка при обработке запроса</AlertTitle>
+                    <AlertDescription>{errorText(error.message)}</AlertDescription>
+                    {hasMessages && (
+                      <Button type="button" variant="outline" size="sm" className="mt-2 justify-self-start pointer-coarse:min-h-11" onClick={retry}>
+                        Повторить запрос
+                      </Button>
+                    )}
+                  </Alert>
+                )}
+                <PromptForm isBusy={isBusy} onSubmit={send} onStop={() => void stop()} input={draft} setInput={setDraft} inputRef={inputRef} />
+              </div>
+            </div>
           </div>
         </MessageScroller>
       </MessageScrollerProvider>

@@ -31,7 +31,7 @@ function ScrollableTable({ children }: { children: ReactNode }) {
       )}
       <div
         ref={wrapper}
-        className="typeset-scroll max-w-full overscroll-x-contain rounded-sm focus-visible:outline focus-visible:outline-ring"
+        className="typeset-scroll max-w-full overscroll-x-contain rounded-lg border focus-visible:outline focus-visible:outline-ring"
         role="region"
         aria-label="Таблица в ответе"
         aria-describedby={overflows ? hintId : undefined}
@@ -64,7 +64,7 @@ function httpsOnly(value: string) {
 
 export function TextPart({ part }: { part: { text: string } }) {
   return (
-    <div className="typeset typeset-docs min-w-0 wrap-break-word [&>p]:max-w-[72ch] [&>ul]:max-w-[72ch] [&>ol]:max-w-[72ch]">
+    <div className="typeset typeset-docs min-w-0 wrap-break-word">
       <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml disallowedElements={["img"]} urlTransform={httpsOnly} components={renderers}>
         {part.text}
       </ReactMarkdown>

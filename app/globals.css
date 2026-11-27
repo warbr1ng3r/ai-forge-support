@@ -9,6 +9,11 @@
   @apply mx-auto w-full min-w-0 max-w-5xl px-4 sm:px-6;
 }
 
+@utility chat-gutter {
+  @apply scrollbar-thin;
+  scrollbar-gutter: stable both-edges;
+}
+
 .typeset-docs {
   --typeset-font-body: var(--app-sans);
   --typeset-font-heading: var(--app-sans);
