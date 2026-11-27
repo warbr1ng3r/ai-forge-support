@@ -24,6 +24,7 @@ const altArchitectureFacts = "Эльбрус-8СВ использует e2kv5. A
 const titleWords = (text: string) => normalizeSearch(text).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const plainText = (text: string) => text.replace(/[\r\n*\[\]<>]/g, " ");
 const mentionedOfferIds = (text: string) => [...new Set(text.match(/(?<![\p{L}\d-])\d{4,16}(?![\p{L}\d-])/gu) ?? [])];
+const codeword = /кодово\p{L}* слов/iu;
 const conferenceQuestions = [
   {
     mentioned: /(?:кто|все|сколько).{0,80}(?:на экран|видеть друг друга|показыва\p{L}* видео)|(?:докладчик|выступающ).{0,60}(?:зрител|смотр)/iu,
@@ -539,8 +540,10 @@ ${asksPromotionalDiscount ? `${discountTerms} При необходимости 
       ...(needsConferenceDetails
         ? conferenceQuestions.filter(({ mentioned }) => !mentioned.test(answer)).map(({ question }) => question)
         : []),
-      storePolicies.has("store:discount-stacking") && /кодово\p{L}* слов/iu.test(latestBuyer)
-        && !/срок|по времени|действу\p{L}* до/iu.test(answer)
+      storePolicies.has("store:discount-stacking") && codeword.test(latestBuyer)
+        && !answer.split(/[.!?\n]/u).some(sentence => codeword.test(sentence)
+          && /срок|по времени|действу\p{L}* до/iu.test(sentence)
+          && /продукт|товар|верси|редакци/iu.test(sentence))
         && "Кодовое слово может иметь ограниченный срок и действовать только для отдельных продуктов и версий.",
       storePolicies.has("store:company-license-succession")
         && !/(?:ликвидац|ликвидир).{0,100}(?:теряет|утрачива|прекраща)|(?:теряет|утрачива|прекраща).{0,100}(?:ликвидац|ликвидир)/iu.test(answer)
