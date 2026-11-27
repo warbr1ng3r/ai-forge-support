@@ -44,6 +44,7 @@ const tierRepriceQuestion = "Заказываем 12 лицензий той ж�
 const elbrusQuestion = "Нужна «Альт Рабочая станция 10» для Эльбрус-8СВ, артикул ALT10-0900W. Подтвердите цену 10 560 ₽ и наличие.";
 const conferenceQuestion = "Нужна ВКС на своей инфраструктуре. Какие данные нужны для выбора лицензии?";
 const codewordQuestion = "Можно ли совместить кодовое слово магазина с акционной ценой?";
+const agentDiscountQuestion = "По акции скидки суммируются. Можно ли добавить вашу скидку до 5% к купону, акции или корпоративной цене?";
 const storePolicyChecks = [
   {
     question: "Оплатили счёт после истечения срока. Если платёж не примут, когда ждать возврата денег?",
@@ -152,6 +153,11 @@ globalThis.fetch = async (input, init) => {
   }
   if (body.messages.some(turn => turn.role === "user" && turn.content === codewordQuestion)) {
     return stream({ content: "Скидка по кодовому слову зависит от продукта. Уточните срок лицензии и срок действия цены." }, "stop");
+  }
+  if (body.messages.some(turn => turn.role === "user" && turn.content === agentDiscountQuestion)) {
+    assert.match(system, /скидки не суммируются, если условия акции прямо не разрешают/iu);
+    assert.match(system, /скидка помощника до 5% не суммируется с купоном, акцией или корпоративной ценой/iu);
+    return stream({ content: "Общие правила допускают исключения по условиям акции." }, "stop");
   }
   const storePolicy = storePolicyChecks.find(({ question }) => body.messages.some(turn => turn.role === "user" && turn.content.includes(question)));
   if (storePolicy) {
@@ -784,7 +790,15 @@ try {
   assert.match(conferenceStream, /"finishReason":"stop"/);
   assert.doesNotMatch(conferenceStream, /"type":"error"|"type":"tool-input-available"/);
   const codewordReply = await post({ messages: [message("discount-codeword", "user", codewordQuestion)] });
-  assert.match(await codewordReply.text(), /Кодовое слово может иметь ограниченный срок.*отдельных продуктов и версий/);
+  const codewordStream = await codewordReply.text();
+  assert.match(codewordStream, /Кодовое слово может иметь ограниченный срок.*отдельных продуктов и версий/);
+  assert.doesNotMatch(codewordStream, /Собственная скидка помощника/);
+  const agentDiscountReply = await post({ messages: [message("agent-discount", "user", agentDiscountQuestion)] });
+  assert.equal(agentDiscountReply.status, 200);
+  const agentDiscountStream = await agentDiscountReply.text();
+  assert.match(agentDiscountStream, /скидка помощника до 5% не суммируется с купоном, акцией или корпоративной ценой/iu);
+  assert.match(agentDiscountStream, /Исключения для совмещения других скидок этого ограничения не меняют/);
+  assert.match(agentDiscountStream, /"finishReason":"stop"/);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;
