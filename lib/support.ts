@@ -147,10 +147,10 @@ export function createSupport(
   const needsExpansionDetails = isSubscriptionExpansion(buyerTurns)
     && !/(?:артикул|sku|код позиции|номер договора)\s*[:№]?\s*(?:[a-z0-9][a-z0-9-]{4,}|\d{4,})/i.test(buyerText);
   let knowledge = "";
-  let hasStorePolicy = false;
+  const storePolicies = new Set<string>();
   try {
     const facts = lookupKnowledge(buyerTurns.at(-1) ?? "");
-    hasStorePolicy = facts.some(fact => fact.id.startsWith("store:"));
+    for (const fact of facts) if (fact.id.startsWith("store:")) storePolicies.add(fact.id);
     if (facts.length) knowledge = JSON.stringify(facts.map(({ title, fact, source }) => ({ title, fact, source })));
   } catch {
     console.warn("Не удалось прочитать базу знаний поддержки.");
@@ -238,7 +238,7 @@ export function createSupport(
     });
     if (asksTierPrice && !constraintReply) {
       const tierOffers = sameTierFamily ? referencedOfferIds.flatMap(id => {
-        const offer = items.find(id).find(item => item.id === id);
+        const offer = items.find(id).find(item => item.id === id && articleQuantityBounds(item.article));
         return offer ? [offer] : [];
       }) : referenced;
       constraintReply = articleTierPrice(tierOffers, licenseQuantity);
@@ -515,7 +515,13 @@ ${asksPromotionalDiscount ? `${discountTerms} При необходимости 
     verifiedOffers: () => verifiedOffers,
     catalogConstraintReply: () => constraintReply,
     answerNotes: (answer: string) => [
-      hasStorePolicy && !answer.includes(storeKnowledgeSource) && `[Правила магазина Softline](${storeKnowledgeSource})`,
+      storePolicies.has("store:discount-stacking") && /кодово\p{L}* слов/iu.test(latestBuyer)
+        && !/срок|по времени|действу\p{L}* до/iu.test(answer)
+        && "Кодовое слово может иметь ограниченный срок и действовать только для отдельных продуктов и версий.",
+      storePolicies.has("store:company-license-succession")
+        && !/(?:ликвидац|ликвидир).{0,100}(?:теряет|утрачива|прекраща)|(?:теряет|утрачива|прекраща).{0,100}(?:ликвидац|ликвидир)/iu.test(answer)
+        && "По справке магазина при ликвидации без правопреемства лицензия теряет силу.",
+      storePolicies.size > 0 && !answer.includes(storeKnowledgeSource) && `[Правила магазина Softline](${storeKnowledgeSource})`,
       installationIssue && !/официальн\p{L}*\s+(?:сайт|поддержк)/iu.test(answer)
         && "Сверьте системные требования для вашей версии. Если нужно скачать установщик заново, используйте официальный сайт производителя.",
       asksPromotionalDiscount && (

@@ -756,7 +756,7 @@ try {
   assert.match(packageStream, /Демо-КП и счёт» в карточке.*количество 1/);
   const repriced = await post({
     messages: [
-      message("original-tier", "user", "Сравните бессрочные локальные позиции 532973, 532974, 532975, 532976 на 4 лицензии."),
+      message("original-tier", "user", "Сравните бессрочные локальные позиции GstarCAD 2027 532973, 532974, 532975, 532976 на 4 лицензии."),
       message("updated-tier", "user", tierRepriceQuestion),
     ],
     previousOfferIds: ["532973", "532974", "532975", "532976"],
