@@ -36,6 +36,7 @@ const documentFollowUp = "Подготовьте черновик КП для п
 const installationQuestion = "Лицензия видна в аккаунте, но при установке не удалось скачать файл. Что делать?";
 const promotionQuestion = "У производителя есть специальные условия для небольших компаний. Вы можете подтвердить скидку?";
 const privatePurchaseQuestion = "Я самозанятый без ИП. Могу купить электронную лицензию как физлицо? Продукт ещё не выбрал.";
+const renewalQuestion = "Проверьте СКАНЕР-ВС 7, позицию 486969. Это продление Enterprise на год и на 2048 активов? Какова цена в каталоге?";
 const endpoint = "http://localhost/api/chat";
 const post = (body: unknown) => POST(new Request(endpoint, { method: "POST", body: JSON.stringify(body) }));
 
@@ -101,6 +102,20 @@ globalThis.fetch = async (input, init) => {
     return stream({ content: "Купить как физлицо можно, если условия позиции это допускают. Уточните название или артикул." }, "stop");
   }
   const tool = body.messages.findLast(turn => turn.role === "tool");
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(renewalQuestion))) {
+    if (tool) {
+      const [offer] = JSON.parse(tool.content).offers;
+      assert.equal(offer.id, "486969");
+      assert.equal(offer.licenseOperation, "renewal");
+      assert.match(system, /у основной лицензии и её продления могут быть разные артикулы/iu);
+      assert.match(system, /условия допуска к продлению.*только по карточке или правилам производителя/iu);
+      return stream({ content: "Это продление Enterprise на 12 месяцев для 2048 активов за 966 000 ₽." }, "stop");
+    }
+    return stream({ tool_calls: [{
+      index: 0, id: "fixture_scanner_renewal", type: "function",
+      function: { name: "findOffer", arguments: '{"id":"486969"}' },
+    }] }, "tool_calls");
+  }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes("будет 20 узлов"))) {
     if (tool) return stream({}, "stop");
     return stream({ tool_calls: [{
@@ -576,6 +591,11 @@ try {
   const purchaseStream = await purchase.text();
   assert.match(purchaseStream, /если условия позиции это допускают/);
   assert.doesNotMatch(purchaseStream, /Не удалось закончить подбор/);
+  const renewal = await post({ messages: [message("renewal-eligibility", "user", renewalQuestion)] });
+  const renewalStream = await renewal.text();
+  assert.match(renewalStream, /"id":"486969"/);
+  assert.match(renewalStream, /за 966 000 ₽/);
+  assert.doesNotMatch(renewalStream, /"type":"error"/);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;
