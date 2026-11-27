@@ -1,0 +1,29 @@
+[Unit]
+Description=AI Forge Support Agent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ai-forge
+Group=ai-forge
+WorkingDirectory=/opt/ai-forge-support
+EnvironmentFile=/etc/ai-forge-support/runtime.env
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=CATALOG_DB=/var/lib/ai-forge-support-catalog/catalog.sqlite
+Environment=SUPPORT_DB=/var/lib/ai-forge-support/support.sqlite
+ExecStart=/opt/node-v24.15.0-linux-x64/bin/node /opt/ai-forge-support/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3013
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+StateDirectory=ai-forge-support
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
