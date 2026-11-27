@@ -246,13 +246,15 @@ export async function POST(request: Request) {
         }
         if (chunk.type === "error") hasError = true;
         if (chunk.type === "finish" && !hasError && !request.signal.aborted) {
+          const documentReply = verifiedFit && asksForDocuments && !constrainedAnswer
+            && !/демо-кп\s+и\s+сч[её]т/iu.test(answerAfterResult)
+            ? verifiedDocumentReply(verifiedOffers()) : undefined;
           // A tool-only turn still has a catalog outcome, even if the model stopped without prose.
           const outcome = catalogResult ? (constrainedAnswer ?? (verifiedFit ? undefined : catalogGap(answerAfterResult.trim()))
-            ?? (answerAfterResult.trim() ? ""
-            : verifiedFit ? ((asksForDocuments ? verifiedDocumentReply(verifiedOffers()) : undefined)
-              ?? "Подходящие по проверенным условиям позиции отмечены в выдаче.")
+            ?? (answerAfterResult.trim() || documentReply ? ""
+            : verifiedFit ? "Подходящие по проверенным условиям позиции отмечены в выдаче."
             : "В каталоге не удалось подтвердить подходящую позицию по заданным условиям.")) : undefined;
-          const delta = [outcome, ...answerNotes(answerAfterResult)].filter(Boolean).join("\n\n");
+          const delta = [outcome, documentReply, ...answerNotes(answerAfterResult)].filter(Boolean).join("\n\n");
           if (delta) {
             const id = "catalog-outcome";
             controller.enqueue({ type: "text-start", id });

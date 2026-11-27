@@ -199,7 +199,10 @@ globalThis.fetch = async (input, init) => {
     }] }, "tool_calls");
   }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(packageQuoteQuestion))) {
-    if (tool && JSON.parse(tool.content).candidates) return stream({}, "stop");
+    if (tool && JSON.parse(tool.content).candidates) {
+      const quoted = body.messages.some(turn => turn.role === "user" && turn.content.includes("Получатель ООО Проект Демо"));
+      return stream(quoted ? { content: "Готовлю демо-документы." } : {}, "stop");
+    }
     return stream({ tool_calls: [{
       index: 0, id: tool ? "fixture_check_package" : "fixture_find_package", type: "function",
       function: tool
@@ -767,11 +770,13 @@ try {
     const result = await post({ messages: [message("store-policy", "user", question)] });
     assert.match(await result.text(), /Ответ по правилам магазина/, question);
   }
-  const packageQuote = await post({ messages: [message("package-quote", "user", packageQuoteQuestion)] });
-  const packageStream = await packageQuote.text();
-  assert.match(packageStream, /"id":"499760","verdict":"fit"/);
-  assert.match(packageStream, /230[\p{Zs}]000 ₽ за одну позицию/u);
-  assert.match(packageStream, /Демо-КП и счёт» в карточке.*количество 1/);
+  for (const question of [packageQuoteQuestion, packageQuoteQuestion + " Получатель ООО Проект Демо."]) {
+    const packageQuote = await post({ messages: [message("package-quote", "user", question)] });
+    const packageStream = await packageQuote.text();
+    assert.match(packageStream, /"id":"499760","verdict":"fit"/);
+    assert.match(packageStream, /230[\p{Zs}]000 ₽ за одну позицию/u);
+    assert.match(packageStream, /Демо-КП и счёт» в карточке.*количество 1/);
+  }
   const repriced = await post({
     messages: [
       message("original-tier", "user", "Сравните бессрочные локальные позиции GstarCAD 2027 532973, 532974, 532975, 532976 на 4 лицензии."),
