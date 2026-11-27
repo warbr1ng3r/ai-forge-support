@@ -43,6 +43,16 @@ try {
   assert.match(lookupKnowledge("Купил программу в Softline. Куда обратиться за технической поддержкой?")[0]?.fact ?? "",
     /бесплатно в течение трёх месяцев.*store\.support@softline\.com.*9:00 до 18:00/);
   assert.match(lookupKnowledge("Можно передумать и вернуть коробочную лицензию?")[0]?.fact ?? "", /семи дней/);
+  const damagedShipment = lookupKnowledge("У перевозчика при выдаче коробка разбита и обнаружилась недостача. Кому и когда отправить акт?")[0];
+  assert.equal(damagedShipment?.id, "store:regional-carrier-claims");
+  assert.match(damagedShipment.fact, /сотрудники перевозчика.*коммерческий акт.*фотографии.*1–2 дня.*sales\.r@softline\.com.*менеджеру.*двух рабочих дней/);
+  const pickupDocuments = lookupKnowledge("Представитель ИП будет забирать заказ, какие документы ему предъявить?")[0];
+  assert.equal(pickupDocuments?.id, "store:pickup-documents");
+  assert.match(pickupDocuments.fact, /оригинал доверенности формы М2.*паспорт получателя.*копия свидетельства о регистрации ИП.*копия паспорта ИП/);
+  const paperDocuments = lookupKnowledge("После отправки ключа когда пришлют бумажные закрывающие документы? Коробку везёт курьер.")[0];
+  assert.equal(paperDocuments?.id, "store:paper-accounting-documents");
+  assert.match(paperDocuments.fact, /Почтой России.*семи рабочих дней после отправки ключа.*срок доставки зависит.*вместе с заказом/);
+  assert.ok(!lookupKnowledge("Где скачать закрывающие документы в личном кабинете?").some(fact => fact.id === "store:paper-accounting-documents"));
   assert.equal(lookupKnowledge("Нужен сертификат ФСТЭК и техподдержка на год для Astra Linux").length, 0);
   assert.equal(knowledgeEntry.safeParse({ ...article, source: "javascript:alert(1)" }).success, false);
   assert.equal(knowledgeEntry.safeParse({ ...article, keywords: "..." }).success, false);
