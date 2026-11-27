@@ -68,6 +68,7 @@ export default async function ManagerPage({ searchParams }: {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Очередь обращений</h2>
           <nav aria-label="Менеджерский раздел" className="flex flex-wrap gap-2">
+            <Link href="/manager/knowledge" className={buttonVariants({ variant: "outline", className: "min-h-11" })}>База знаний</Link>
             <Link href="/" className={buttonVariants({ variant: "ghost", className: "min-h-11" })}>К чату</Link>
             <form action="/api/manager/session" method="post">
               <input type="hidden" name="action" value="logout" />

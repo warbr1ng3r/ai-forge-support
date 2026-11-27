@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { z } from "zod";
 import { normalizeSearch, type Offer } from "./catalog.ts";
 
 type Fact = {
@@ -13,6 +15,16 @@ type Fact = {
 };
 
 const knowledgePhrase = (text: string) => normalizeSearch(text).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+export const knowledgeEntry = z.object({
+  title: z.string().trim().min(3).max(120),
+  keywords: z.string().trim().min(2).max(180)
+    .transform(value => [...new Set(value.split(",").map(knowledgePhrase).filter(word => word.length >= 2))])
+    .pipe(z.array(z.string().max(60)).min(1).max(6)),
+  fact: z.string().trim().min(8).max(1200),
+  source: z.url({ protocol: /^https$/, normalize: true }).max(500)
+    .refine(value => { const url = new URL(value); return !url.username && !url.password; }),
+});
+
 let database: DatabaseSync | undefined;
 function db() {
   if (database) return database;
@@ -63,6 +75,24 @@ export function recordConsultation(tools: readonly string[], verified: readonly 
   store.prepare("INSERT INTO support_events (action, details, createdAt) VALUES (?, ?, ?)").run(
     complete ? "Ответ завершён" : "Ответ прерван", JSON.stringify({ tools, learned }), time,
   );
+}
+
+export function publishKnowledge(value: z.output<typeof knowledgeEntry>) {
+  const store = db();
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  store.exec("BEGIN IMMEDIATE");
+  try {
+    store.prepare("INSERT INTO knowledge_facts VALUES (?, ?, ?, ?, ?, 'manager', ?)")
+      .run(id, value.title, JSON.stringify(value.keywords), value.fact, value.source, now);
+    store.prepare("INSERT INTO support_events (action, details, createdAt) VALUES (?, ?, ?)")
+      .run("Опубликована статья", JSON.stringify({ id }), now);
+    store.exec("COMMIT");
+    return id;
+  } catch (error) {
+    if (store.isTransaction) store.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 export function recordSupportEvent(action: string, details: { offerId?: string; count?: number; handoffId?: string }) {
