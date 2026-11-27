@@ -376,6 +376,15 @@ ${asksPromotionalDiscount ? `${discountTerms} При необходимости 
   return {
     mastra: new Mastra({ agents: { [agentId]: agent } }),
     needsExpansionDetails,
+    catalogReplyInstructions: () => {
+      if (!found.size) return "";
+      return [
+        [...found.values()].some(offer => offer.licenseOperation === "renewal" || offer.licenseOperation === "expired_renewal")
+          && "В итоговом ответе о продлении ограничься выбором позиции, отличиями в правах, подтверждёнными сроком и ценой. Исключи советы сверять совпадение артикулов исходной лицензии и продления, в том числе в разделе „что проверить“. Условия исходной лицензии называй только при наличии прямого подтверждения в данных.",
+        /входит ли|включ[её]н\p{L}*\s+ли|состав поставки|нужно ли покупать|надо ли покупать/iu.test(latestBuyer)
+          && "Отдельная позиция поддержки и физическая поставка не устанавливают состав комплекта или обязательность дополнительной покупки. Если источник явно этого не подтверждает, не говори, что поддержку, носитель или иной компонент нужно либо не нужно покупать. Назови состав и обязательность предметом проверки.",
+      ].filter(Boolean).join("\n");
+    },
     catalogGroups: () => checkedGroups,
     catalogAssessment: () => candidatesChecked,
     verifiedOffers: () => verifiedOffers,

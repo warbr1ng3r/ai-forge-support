@@ -125,6 +125,7 @@ globalThis.fetch = async (input, init) => {
       assert.match(offer.description, /тип операции сам по себе не подтверждает требования к действующему сроку/iu);
       assert.match(offer.description, /отметка с номером не подтверждает региональных ограничений/iu);
       assert.match(system, /у основной лицензии и её продления могут быть разные артикулы/iu);
+      assert.match(system, /Исключи советы сверять совпадение артикулов/iu);
       assert.match(system, /условия допуска к продлению.*только по карточке или правилам производителя/iu);
       return stream({ content: "Это продление Enterprise на 12 месяцев для 2048 активов за 966 000 ₽." }, "stop");
     }

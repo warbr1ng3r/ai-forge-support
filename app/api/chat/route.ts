@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   const previousOfferIds = [...new Set(parsed.data.previousOfferIds)];
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]);
   try {
-    const { mastra, needsExpansionDetails, catalogGroups, catalogAssessment, catalogConstraintReply, catalogGap, answerNotes, verifiedOffers } =
+    const { mastra, needsExpansionDetails, catalogReplyInstructions, catalogGroups, catalogAssessment, catalogConstraintReply, catalogGap, answerNotes, verifiedOffers } =
       createSupport(apiKey, requirements, signal, previousOfferIds);
     const stream = await handleChatStream({
       mastra,
@@ -121,11 +121,15 @@ export async function POST(request: Request) {
             activeTools: asksAboutComponents ? ["searchCatalog", "findOffer"] : ["searchCatalog", "findOffer", "searchCatalogBatch"],
             toolChoice: "required",
           };
+          const replyInstructions = catalogReplyInstructions();
+          const groundedMessages = replyInstructions
+            ? [...systemMessages, { role: "system" as const, content: replyInstructions }]
+            : systemMessages;
           const checked = catalogAssessment();
           if (checked || stepNumber === 3) return {
             activeTools: [],
             toolChoice: "none",
-            systemMessages: [...systemMessages, {
+            systemMessages: [...groundedMessages, {
               role: "system",
               content: [
                 "Сейчас дай итог по полученным данным. У неподтверждённого варианта назови недостающий факт или отличие. Не обещай продолжить поиск.",
@@ -133,8 +137,9 @@ export async function POST(request: Request) {
               ].filter(Boolean).join("\n"),
             }],
           };
-          if (stepNumber === 2) return { activeTools: ["verifyFit", "findOffer", "prepareDocuments"] };
-          if (asksAboutComponents) return { activeTools: ["searchCatalog", "discoverCatalog", "findOffer", "verifyFit"] };
+          if (stepNumber === 2) return { activeTools: ["verifyFit", "findOffer", "prepareDocuments"], systemMessages: groundedMessages };
+          if (asksAboutComponents) return { activeTools: ["searchCatalog", "discoverCatalog", "findOffer", "verifyFit"], systemMessages: groundedMessages };
+          if (replyInstructions) return { systemMessages: groundedMessages };
         },
       },
     });
