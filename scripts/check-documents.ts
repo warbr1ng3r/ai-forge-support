@@ -46,6 +46,16 @@ try {
   assert.match(invoiceHtml, /НДС<\/dt><dd>Ставка и сумма не подтверждены/u);
   assert.match(invoiceHtml, /Итог к оплате<\/dt><dd>Не согласован/u);
 
+  for (const type of ["quote", "invoice"]) {
+    const unavailable = await request({ ...quote, type, offerId: "100599", quantity: 1 });
+    assert.equal(unavailable.status, 200, type);
+    assert.equal(unavailable.headers.get("Content-Disposition"), `attachment; filename="${type}-100599.html"`);
+    const html = await documentText(unavailable);
+    assert.match(html, /26 000,00 ₽/u);
+    assert.match(html, /Фактическую поставку подтверждает менеджер\./u);
+    assert.match(html, /Демо-документ\. Для согласования\. Не для оплаты\./u);
+  }
+
   for (const offerId of ["100599", "365609", "477554", "222179"]) {
     const rejected = await request({ ...quote, offerId, quantity: 65 });
     assert.equal(rejected.status, 422, offerId);
@@ -67,6 +77,8 @@ try {
   assert.deepEqual(events.toReversed(), [
     { action: "Сформировано КП", details: { offerId: "19579", count: 2 } },
     { action: "Сформирован проект счёта", details: { offerId: "222182", count: 65 } },
+    { action: "Сформировано КП", details: { offerId: "100599", count: 1 } },
+    { action: "Сформирован проект счёта", details: { offerId: "100599", count: 1 } },
     { action: "Сформировано КП", details: { offerId: "143402", count: 10 } },
   ]);
 

@@ -99,6 +99,7 @@ function documentHtml(request: DocumentRequest, offer: Offer, unit: string, pric
     <h1>${title}</h1>
     <p class="muted">Дата подготовки ${date.format(new Date())}</p>
   </header>
+  ${offer.availableInCatalog ? "" : '<p>Позиция недоступна по снимку каталога. Фактическую поставку подтверждает менеджер.</p>'}
   <dl>
     <dt>Покупатель</dt><dd>${escapeHtml(request.buyer)}</dd>
     <dt>ИНН покупателя</dt><dd>${request.buyerInn ? escapeHtml(request.buyerInn) : "Не указан"}</dd>
@@ -137,8 +138,8 @@ export function createCommerceDocument(request: DocumentRequest): { filename: st
   try {
     const offer = catalog.find(request.offerId).find(item => item.id === request.offerId);
     if (!offer) return { error: "Позиция не найдена в каталоге.", status: 404 };
-    if (!offer.availableInCatalog || offer.price === null) {
-      return { error: "Для этой позиции нет подтверждённой цены или доступности в каталоге.", status: 422 };
+    if (offer.price === null || offer.price <= 0) {
+      return { error: "Для этой позиции нет подтверждённой цены в каталоге.", status: 422 };
     }
     if (!["RUB", "RUR"].includes(offer.currency)) {
       return { error: "Подтверждённая цена в рублях для этой позиции отсутствует.", status: 422 };

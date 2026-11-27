@@ -11,6 +11,7 @@ type CatalogOffer = {
   id: string
   name: string
   price: number | null
+  currency: string
   availableInCatalog: boolean
   priceUnit?: "узел" | "почтовый адрес" | "рабочую станцию или файловый сервер" | "IP-адрес"
   quantityBounds?: { min: number; max?: number }
@@ -29,7 +30,7 @@ export function CommerceDocuments({ offer }: { offer: CatalogOffer }) {
   const [pending, setPending] = useState<"quote" | "invoice" | null>(null)
   const [error, setError] = useState("")
 
-  if (!offer.availableInCatalog || offer.price === null || offer.price <= 0) return null
+  if (offer.price === null || offer.price <= 0 || !["RUB", "RUR"].includes(offer.currency)) return null
   const isPackage = !offer.priceUnit && offer.maxUsers !== null && offer.maxUsers > 1
   const quantityLabel = offer.priceUnit ? quantityLabels[offer.priceUnit] : isPackage ? "Количество пакетов" : "Количество единиц"
   const range = offer.quantityBounds
@@ -82,6 +83,9 @@ export function CommerceDocuments({ offer }: { offer: CatalogOffer }) {
       <CollapsibleContent className="pt-3">
         <form onSubmit={download} className="grid min-w-0 gap-3" aria-label={`Демо-документы для ${offer.name}`}>
           <p className="text-xs text-muted-foreground">Файлы HTML можно открыть в браузере и распечатать.</p>
+          {!offer.availableInCatalog && (
+            <Alert><AlertDescription>Фактическую поставку подтверждает менеджер. Документы используют цену со снимка каталога.</AlertDescription></Alert>
+          )}
           <fieldset disabled={pending !== null} className="grid min-w-0 gap-3">
             <label className="grid gap-1 text-sm font-medium">
               Покупатель

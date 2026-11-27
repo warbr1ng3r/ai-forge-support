@@ -133,6 +133,8 @@ try {
   assert.deepEqual(await verdicts("Я самозанятый, подходит ли лицензия КриптоПро?", "365874"), ["unknown"]);
   assert.deepEqual(await verdicts("Мы школа. Можно ли купить лицензию по договору?", "505192", "5001"), ["unknown", "fit"]);
   assert.deepEqual(await verdicts("Покупаем для муниципального учреждения.", "505192", "283688"), ["unknown", "fit"]);
+  assert.deepEqual(await verdicts("Нужны демо-КП и проект счёта на одну позицию 100599.", "100599"), ["fit"]);
+  assert.deepEqual(await verdicts("Можно ли купить позицию 100599? Она в наличии?", "100599"), ["contradiction"]);
   assert.deepEqual(await verdicts(
     "Мы школа. Подходит ли лицензия?\nПокупатель: Уточнение: покупатель — коммерческая организация.",
     "505192"), ["fit"]);
