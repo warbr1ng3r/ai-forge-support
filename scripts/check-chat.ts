@@ -40,6 +40,7 @@ const privatePurchaseQuestion = "Я самозанятый без ИП. Могу
 const renewalQuestion = "Проверьте СКАНЕР-ВС 7, позицию 486969. Это продление Enterprise на год и на 2048 активов? Какова цена в каталоге?";
 const bundlePriceQuestion = "ТИМ КРЕДО на 11 рабочих мест, позиции 438375 и 542049. Это цена за весь комплект или за одно место?";
 const packageQuoteQuestion = "Нужен один клиентский компонент Appius PLM для КОМПАС-3D на пять рабочих мест, позиция 499760. Подготовьте демо-КП.";
+const tierRepriceQuestion = "Заказываем 12 лицензий той же редакции. Пересчитайте цену.";
 const elbrusQuestion = "Нужна «Альт Рабочая станция 10» для Эльбрус-8СВ, артикул ALT10-0900W. Подтвердите цену 10 560 ₽ и наличие.";
 const storePolicyChecks = [
   {
@@ -172,6 +173,13 @@ globalThis.fetch = async (input, init) => {
     return stream({ content: "Купить как физлицо можно, если условия позиции это допускают. Уточните название или артикул." }, "stop");
   }
   const tool = body.messages.findLast(turn => turn.role === "tool");
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(tierRepriceQuestion))) {
+    assert.equal(tool, undefined, "Repricing a known tier should finish after the first catalog step");
+    return stream({ tool_calls: [{
+      index: 0, id: "fixture_tier_search_with_seat_filter", type: "function",
+      function: { name: "searchCatalog", arguments: '{"query":"GstarCAD 2027 LT локальная постоянная","users":12,"operation":"new"}' },
+    }] }, "tool_calls");
+  }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(packageQuoteQuestion))) {
     if (tool && JSON.parse(tool.content).candidates) return stream({}, "stop");
     return stream({ tool_calls: [{
@@ -746,6 +754,16 @@ try {
   assert.match(packageStream, /"id":"499760","verdict":"fit"/);
   assert.match(packageStream, /230[\p{Zs}]000 ₽ за одну позицию/u);
   assert.match(packageStream, /Демо-КП и счёт» в карточке.*количество 1/);
+  const repriced = await post({
+    messages: [
+      message("original-tier", "user", "Сравните бессрочные локальные позиции 532973, 532974, 532975, 532976 на 4 лицензии."),
+      message("updated-tier", "user", tierRepriceQuestion),
+    ],
+    previousOfferIds: ["532973", "532974", "532975", "532976"],
+  });
+  const repricedStream = await repriced.text();
+  assert.match(repricedStream, /532973.*42[\p{Zs}]900 ₽ за лицензию.*514[\p{Zs}]800 ₽/u);
+  assert.doesNotMatch(repricedStream, /"type":"error"|191[\p{Zs}]600/u);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;

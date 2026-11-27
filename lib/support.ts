@@ -130,6 +130,9 @@ export function createSupport(
   const nodeQuantity = Number(latestBuyer.match(/(?<!\d)([1-9]\d{0,5})\s+уз(?:ел|ла|лов)(?!\p{L})/iu)?.[1]);
   const licenseQuantity = Number(latestBuyer.match(/(?<!\d)([1-9]\d{0,5})\s+(?:[\p{L}-]+\s+){0,2}лицензи\p{L}*(?!\p{L})/iu)?.[1]);
   const asksTierPrice = Number.isFinite(licenseQuantity) && /цен|стоимост|расч[её]т|рассчита|итог|ориентир|пересчита/iu.test(latestBuyer);
+  const sameTierFamily = !currentOfferIds.length
+    && /той же\s+(?:редакци|верси)|того же\s+(?:вариант|продукт)|по тем же\s+услови/iu.test(latestBuyer)
+    && !/год|месяц|сетев|локальн|продлен|обновлен|апгрейд|смен\p{L}*\s+(?:редакци|верси|тип)/iu.test(latestBuyer);
   const [articleMatch, anotherArticle] = latestBuyer.matchAll(
     /(?<!\p{L})артикул(?:а|у|е|ом)?(?:\s*[:№]\s*|\s+)[«"]?([a-z0-9][a-z0-9._-]{2,98}[a-z0-9])(?![\p{L}\p{N}_-])/gu,
   );
@@ -233,7 +236,13 @@ export function createSupport(
       const offer = found.get(id);
       return offer ? [offer] : [];
     });
-    if (asksTierPrice) constraintReply ??= articleTierPrice(referenced, licenseQuantity);
+    if (asksTierPrice && !constraintReply) {
+      const tierOffers = sameTierFamily ? referencedOfferIds.flatMap(id => {
+        const offer = items.find(id).find(item => item.id === id);
+        return offer ? [offer] : [];
+      }) : referenced;
+      constraintReply = articleTierPrice(tierOffers, licenseQuantity);
+    }
     if (referenced.length && referenced.length === referencedOfferIds.length) {
       constraintReply ??= confirmedRenewalChoice(latestBuyer, referenced);
       if (baseLicenseQuote && referenced.every(offer => /(?<!\p{L})(?:плагин|plugin\b|надстройк|add-on\b)/iu.test(offer.name))) {
