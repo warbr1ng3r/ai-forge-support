@@ -42,6 +42,7 @@ const bundlePriceQuestion = "ТИМ КРЕДО на 11 рабочих мест, 
 const packageQuoteQuestion = "Нужен один клиентский компонент Appius PLM для КОМПАС-3D на пять рабочих мест, позиция 499760. Подготовьте демо-КП.";
 const tierRepriceQuestion = "Заказываем 12 лицензий той же редакции. Пересчитайте цену.";
 const elbrusQuestion = "Нужна «Альт Рабочая станция 10» для Эльбрус-8СВ, артикул ALT10-0900W. Подтвердите цену 10 560 ₽ и наличие.";
+const conferenceQuestion = "Нужна ВКС на своей инфраструктуре. Какие данные нужны для выбора лицензии?";
 const storePolicyChecks = [
   {
     question: "Оплатили счёт после истечения срока. Если платёж не примут, когда ждать возврата денег?",
@@ -141,6 +142,13 @@ globalThis.fetch = async (input, init) => {
   const body = await request.json() as { messages: Array<{ role: string; content: string }>; tool_choice?: string; tools?: unknown[]; max_tokens?: number };
   assert.equal(body.max_tokens, 2048, "Bound the provider's per-call balance reservation");
   const system = body.messages.filter(turn => turn.role === "system").map(turn => turn.content).join("\n");
+  if (body.messages.some(turn => turn.role === "user" && turn.content === conferenceQuestion)) {
+    assert.ok(!body.tools?.length);
+    assert.match(system, /кто должен быть виден на экране/iu);
+    assert.match(system, /на какой операционной системе/iu);
+    assert.match(system, /на какой срок она нужна/iu);
+    return stream({ content: "Сколько участников будет на встрече?" }, "stop");
+  }
   const storePolicy = storePolicyChecks.find(({ question }) => body.messages.some(turn => turn.role === "user" && turn.content.includes(question)));
   if (storePolicy) {
     for (const fact of storePolicy.facts) assert.match(system, fact);
@@ -764,6 +772,13 @@ try {
   const repricedStream = await repriced.text();
   assert.match(repricedStream, /532973.*42[\p{Zs}]900 ₽ за лицензию.*514[\p{Zs}]800 ₽/u);
   assert.doesNotMatch(repricedStream, /"type":"error"|191[\p{Zs}]600/u);
+  const conference = await post({ messages: [message("conference-discovery", "user", conferenceQuestion)] });
+  const conferenceStream = await conference.text();
+  assert.match(conferenceStream, /кто должен быть виден на экране/iu);
+  assert.match(conferenceStream, /на какой операционной системе/iu);
+  assert.match(conferenceStream, /на какой срок она нужна/iu);
+  assert.match(conferenceStream, /"finishReason":"stop"/);
+  assert.doesNotMatch(conferenceStream, /"type":"error"|"type":"tool-input-available"/);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;

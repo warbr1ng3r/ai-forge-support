@@ -24,6 +24,20 @@ const altArchitectureFacts = "Эльбрус-8СВ использует e2kv5. A
 const titleWords = (text: string) => normalizeSearch(text).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const plainText = (text: string) => text.replace(/[\r\n*\[\]<>]/g, " ");
 const mentionedOfferIds = (text: string) => [...new Set(text.match(/(?<![\p{L}\d-])\d{4,16}(?![\p{L}\d-])/gu) ?? [])];
+const conferenceQuestions = [
+  {
+    mentioned: /(?:кто|все|сколько).{0,80}(?:на экран|видеть друг друга|показыва\p{L}* видео)|(?:докладчик|выступающ).{0,60}(?:зрител|смотр)/iu,
+    question: "Раскладка. Сколько участников подключаются одновременно и кто должен быть виден на экране — все или только выступающие?",
+  },
+  {
+    mentioned: /платформ|операционн\p{L}*\s+систем|windows|linux|(?<!\p{L})ос(?!\p{L})/iu,
+    question: "Платформа сервера. На какой операционной системе будет работать сервер ВКС?",
+  },
+  {
+    mentioned: /срок.{0,45}лицензи|лицензи.{0,45}срок|(?:годов\p{L}*|на год).{0,60}бессрочн|бессрочн\p{L}*.{0,60}(?:годов|на год)/iu,
+    question: "Срок лицензии. На какой срок она нужна, например на год или бессрочно?",
+  },
+];
 
 function catalogPriceLine(offer: Offer) {
   const currency = /^(?:RUB|RUR)$/.test(offer.currency) ? "₽" : offer.currency;
@@ -118,6 +132,10 @@ export function createSupport(
     && /(?:состав|структур\p{L}*)\s+издели/iu.test(latestBuyer)
     && /версии|чертеж|сапр|\bcad\b/iu.test(latestBuyer)
     && /(?:какие|что)\s+(?:еще\s+)?(?:данные|детали|параметры|уточнить)/iu.test(latestBuyer);
+  const needsConferenceDetails = buyerTurns.length === 1 && !currentOfferIds.length
+    && /видеосовещан|видеоконференц|(?<!\p{L})вкс(?!\p{L})/iu.test(latestBuyer)
+    && /сервер|локальн|сво\p{L}*\s+инфраструктур/iu.test(latestBuyer)
+    && /(?:какие|что).{0,40}(?:данн|детал|параметр|уточнит)/iu.test(latestBuyer);
   const baseLicenseQuote = /(?<!\p{L})(?:кп|коммерческ\p{L}*\s+предложени\p{L}*|сч[её]т)(?!\p{L})/iu.test(latestBuyer)
     && /(?:основн\p{L}*|базов\p{L}*|сам[ау]?)\s+(?:лицензи|редактор|программ|продукт)/iu.test(latestBuyer);
   const askedBundlePriceIds = /цен|стоимост/iu.test(latestBuyer) && /комплект|пакет|набор|bundle|pack/iu.test(latestBuyer)
@@ -501,6 +519,9 @@ ${asksPromotionalDiscount ? `${discountTerms} При необходимости 
     mastra: new Mastra({ agents: { [agentId]: agent } }),
     needsExpansionDetails,
     needsEngineeringDetails,
+    conferenceClarification: needsConferenceDetails
+      ? `Для выбора лицензии серверной ВКС задай три коротких вопроса. Используй эти формулировки и учти уже названные условия. Не рекомендуй конкретные позиции до уточнений.\n${conferenceQuestions.map(({ question }) => question).join("\n")}`
+      : undefined,
     catalogReplyInstructions: () => {
       if (!found.size) return "";
       return [
@@ -515,6 +536,9 @@ ${asksPromotionalDiscount ? `${discountTerms} При необходимости 
     verifiedOffers: () => verifiedOffers,
     catalogConstraintReply: () => constraintReply,
     answerNotes: (answer: string) => [
+      ...(needsConferenceDetails
+        ? conferenceQuestions.filter(({ mentioned }) => !mentioned.test(answer)).map(({ question }) => question)
+        : []),
       storePolicies.has("store:discount-stacking") && /кодово\p{L}* слов/iu.test(latestBuyer)
         && !/срок|по времени|действу\p{L}* до/iu.test(answer)
         && "Кодовое слово может иметь ограниченный срок и действовать только для отдельных продуктов и версий.",
