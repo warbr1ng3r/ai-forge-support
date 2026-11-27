@@ -39,6 +39,13 @@ const promotionQuestion = "У производителя есть специал
 const privatePurchaseQuestion = "Я самозанятый без ИП. Могу купить электронную лицензию как физлицо? Продукт ещё не выбрал.";
 const renewalQuestion = "Проверьте СКАНЕР-ВС 7, позицию 486969. Это продление Enterprise на год и на 2048 активов? Какова цена в каталоге?";
 const bundlePriceQuestion = "ТИМ КРЕДО на 11 рабочих мест, позиции 438375 и 542049. Это цена за весь комплект или за одно место?";
+const scopedLicenseChecks = [
+  { question: "Позиция 541992 на год. Хватит ли купить восемь лицензий для восьми управляемых компьютеров и 14 сотрудников?", ids: ["541992"], answer: /одного клиента.*сотрудников.*компьютеров.*лицензируемых подключений/u },
+  { question: "Локальный RuDesktop на год, позиции 487234, 518158 и 518159. Включены ли подключения в управляющий сервер?", ids: ["487234", "518158", "518159"], answer: /сервер и подключения[^\n]*не подтверждает, сколько подключений включено и требуется ли покупать их отдельно/u },
+  { question: "Позиция 433270. Нужна бессрочная лицензия без физической поставки. Какой срок, способ поставки и цена подтверждены?", ids: ["433270"], answer: /Срок по карточке однозначно подтвердить нельзя.*Отсутствие физической поставки карточка не подтверждает.*срок лицензии и способ поставки/u },
+  { question: "Для бессрочной лицензии хочу продлить только обновления. Выбор из 519774 и 519775. Какая цена?", ids: ["519774", "519775"], answer: /Позиция 519775.*Позиция 519774 продлевает временную лицензию/u },
+  { question: "Поправка: лицензия временная. Нужно продлить на год само право использования. Что выбрать из тех же позиций?", previous: "Сравните 519774 и 519775 для продления обновлений.", ids: ["519774", "519775"], answer: /Позиция 519774.*Позиция 519775 продлевает только подписку на обновления.*карточки не подтверждают/u },
+] as const;
 const endpoint = "http://localhost/api/chat";
 const post = (body: unknown) => POST(new Request(endpoint, { method: "POST", body: JSON.stringify(body) }));
 
@@ -104,6 +111,14 @@ globalThis.fetch = async (input, init) => {
     return stream({ content: "Купить как физлицо можно, если условия позиции это допускают. Уточните название или артикул." }, "stop");
   }
   const tool = body.messages.findLast(turn => turn.role === "tool");
+  const licenseCheck = scopedLicenseChecks.find(({ question }) => body.messages.some(turn => turn.role === "user" && turn.content.includes(question)));
+  if (licenseCheck) {
+    assert.equal(tool, undefined, "Exact catalogue evidence should produce a grounded answer without another model step");
+    return stream({ tool_calls: licenseCheck.ids.map((id, index) => ({
+      index, id: `fixture_license_${id}`, type: "function",
+      function: { name: "findOffer", arguments: JSON.stringify({ id }) },
+    })) }, "tool_calls");
+  }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(bundlePriceQuestion))) {
     assert.equal(tool, undefined, "Bundle price must resolve from the catalogue without an inferred unit");
     return stream({ tool_calls: ["438375", "542049"].map((id, index) => ({
@@ -631,6 +646,16 @@ try {
   assert.match(selectedStream, /Фактическую поставку и её срок подтверждает менеджер/);
   assert.match(selectedStream, /"finishReason":"stop"/);
   assert.doesNotMatch(selectedStream, /"type":"error"|"type":"tool-output-error"/);
+  for (const check of scopedLicenseChecks) {
+    const prior = "previous" in check ? [message("old-license", "user", check.previous)] : [];
+    const result = await post({ messages: [...prior, message("license-facts", "user", check.question)] });
+    const text = await result.text();
+    const reply = text.split("\n").filter(line => line.startsWith("data: {\"type\":\"text-delta\""))
+      .map(line => JSON.parse(line.slice(6)).delta).join("").replaceAll("\n", " ");
+    assert.match(reply, check.answer);
+    assert.match(text, /"finishReason":"stop"/);
+    assert.doesNotMatch(text, /"type":"error"|"type":"tool-output-error"/);
+  }
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;

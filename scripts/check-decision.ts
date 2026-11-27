@@ -130,6 +130,22 @@ try {
   assert.deepEqual(await verdicts("Хочу купить как физическое лицо.", "19579"), ["contradiction"]);
   assert.deepEqual(await verdicts("Мы образовательное учреждение. Подойдёт Dr.Web Security Space?", "231538"), ["contradiction"]);
   assert.deepEqual(await verdicts("Нужна лицензия на 300 одновременных подключений.", "525816"), ["unknown"]);
+  assert.deepEqual(await verdicts(
+    "Для 14 сотрудников и восьми управляемых компьютеров хватит ли купить восемь лицензий на право подключения одного клиента?",
+    "541992"), ["unknown"], "A listed client right does not establish device or employee coverage");
+  assert.deepEqual(await verdicts("Сколько клиентских лицензий нужно для 8 компьютеров?", "541992"), ["unknown"]);
+  assert.deepEqual(await verdicts("Нужно именно право подключения одного клиента. Сколько оно стоит?", "541992"), ["fit"]);
+  assert.deepEqual(await verdicts(
+    "Нужен локальный RuDesktop. Подтверждает ли карточка управляющего сервера, что конкурентные подключения уже включены?",
+    "518158", "487234"), ["unknown", "contradiction"], "A management-server license is not evidence of included connections");
+  assert.deepEqual(await verdicts("Сколько стоит локальный управляющий сервер без проверки комплектности?", "518158"), ["fit"]);
+  assert.deepEqual(await verdicts("Нам не нужен локальный вариант, нужен облачный.", "518158", "487234"), ["contradiction", "fit"]);
+  assert.deepEqual(await verdicts("Нужна точно бессрочная лицензия без физической поставки.", "433270"), ["unknown"]);
+  assert.deepEqual(await verdicts("Срок лицензии: 12 месяцев.", "433270"), ["unknown"], "Conflicting term fields prove neither fit nor contradiction");
+  assert.deepEqual(await verdicts("Какова цена этой позиции по каталогу?", "433270"), ["fit"]);
+  assert.deepEqual(await verdicts("Подходит ли годовая электронная подписка Navicat для некоммерческой организации?", "283688"), ["unknown"]);
+  assert.deepEqual(await verdicts("Мы НКО, не учебная и не государственная организация. Подходит ли эта подписка?", "283688"), ["unknown"]);
+  assert.deepEqual(await verdicts("Мы университет. Подходит ли эта подписка для нас?", "283688"), ["fit"]);
   assert.deepEqual(await verdicts("Я самозанятый, подходит ли лицензия КриптоПро?", "365874"), ["unknown"]);
   assert.deepEqual(await verdicts("Мы школа. Можно ли купить лицензию по договору?", "505192", "5001"), ["unknown", "fit"]);
   assert.deepEqual(await verdicts("Покупаем для муниципального учреждения.", "505192", "283688"), ["unknown", "fit"]);

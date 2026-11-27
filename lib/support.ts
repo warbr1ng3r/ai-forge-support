@@ -5,8 +5,9 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { coversQuantityTier, normalizeSearch, openCatalog, operations, quantityBounds, rubleTotals, type Offer } from "./catalog.ts";
 import { ambiguousBundlePrice, prepareCommerceDocument } from "./commerce-documents.ts";
-import { assessFit, astraEditionFromOfferName, astraEditionScope, buyerType, isCspTls, isSubscriptionExpansion, readUserTurns, requestsStandardCsp, scannerUnitFromName, scannerUnitScope, unresolvedAstraGuestRights } from "./decision.ts";
+import { assessFit, astraEditionFromOfferName, astraEditionScope, buyerType, isCspTls, isSubscriptionExpansion, readUserTurns, requestsStandardCsp, scannerUnitFromName, scannerUnitScope, unresolvedAstraGuestRights, unresolvedClientRightCoverage, unresolvedServerConnectionBundle } from "./decision.ts";
 import { lookupKnowledge } from "./knowledge.ts";
+import { conflictingLicenseFields } from "./license-evidence.ts";
 import { anyDeskFacts, astraFileProtectionFacts, catalogPriceUnit, continentTlsFacts, contentReaderLicensingFacts, drWebEducationFacts, drWebServerLicensing, mDaemonFacts, originProFacts, procurementDocuments, r7MacroFacts, ruPostFacts, securityProductEvidence, securitySearchNotes, storeEdoFacts, storeFacts } from "./store-faq.ts";
 
 export const agentId = "support";
@@ -20,6 +21,28 @@ const batchTerm = /(?:^|(?<=[\s(]))(?:на\s+|(?=\d))(?:(?:[1-9]\d{0,2}|один
 const coreCount = /(?<![\p{L}\p{N}])(\d{1,4})\s*(?:cores?|ядро|ядра|ядер)(?!\p{L})/iu;
 const titleWords = (text: string) => normalizeSearch(text).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const plainText = (text: string) => text.replace(/[\r\n*\[\]<>]/g, " ");
+const mentionedOfferIds = (text: string) => [...new Set(text.match(/(?<![\p{L}\d-])\d{4,16}(?![\p{L}\d-])/gu) ?? [])];
+
+function catalogPriceLine(offer: Offer) {
+  const currency = /^(?:RUB|RUR)$/.test(offer.currency) ? "₽" : offer.currency;
+  const price = offer.price != null && offer.price > 0 ? `Цена в снимке — ${offer.price.toLocaleString("ru-RU")} ${currency}.` : "Цена в снимке не указана.";
+  return `Позиция ${offer.id}, ${plainText(offer.name)}. ${price}`;
+}
+
+function confirmedRenewalChoice(question: string, offers: Offer[]) {
+  const updates = offers.filter(({ name }) => /продлени\p{L}*\s+подписк\p{L}*\s+на\s+обновлен/iu.test(name));
+  const licenses = offers.filter(({ name }) => /продлени\p{L}*(?:\s+\p{L}+){0,3}\s+временн\p{L}*\s+лицензи/iu.test(name));
+  if (offers.length !== 2 || updates.length !== 1 || licenses.length !== 1 || updates[0] === licenses[0]) return;
+  const wantsUpdates = /(?:продл\p{L}*\s+только\s+обновлен|продл\p{L}*\s+подписк\p{L}*\s+на\s+обновлен)/iu.test(question);
+  const wantsLicense = /продл\p{L}*[^.!?]{0,65}(?:право использования|временн\p{L}*\s+лицензи)/iu.test(question);
+  if (wantsUpdates === wantsLicense) return;
+  const selected = wantsUpdates ? updates[0] : licenses[0];
+  const alternative = wantsUpdates ? licenses[0] : updates[0];
+  const difference = wantsUpdates
+    ? `Позиция ${alternative.id} продлевает временную лицензию. Для обновлений бессрочной лицензии в этой паре предназначена позиция ${selected.id}.`
+    : `Позиция ${alternative.id} продлевает только подписку на обновления. Само право использования временной лицензии продлевает позиция ${selected.id}.`;
+  return `${catalogPriceLine(selected)}\n\n${difference} Условия допуска к продлению по вашему договору карточки не подтверждают.`;
+}
 
 function astraGuestRightsReply(offer: Offer) {
   const facts = ["Назначение", "Срок действия", "Тип техподдержки", "Срок техподдержки"].flatMap(key => {
@@ -69,9 +92,12 @@ export function createSupport(
   const buyerTurns = readUserTurns(requirements);
   const buyerText = buyerTurns.join("\n");
   const latestBuyer = buyerTurns.at(-1) ?? "";
+  const currentOfferIds = mentionedOfferIds(latestBuyer);
+  const referencedOfferIds = currentOfferIds.length ? currentOfferIds
+    : buyerTurns.slice(0, -1).toReversed().map(mentionedOfferIds).find(ids => ids.length) ?? [];
   const askedBundlePriceIds = /цен|стоимост/iu.test(latestBuyer) && /комплект|пакет|набор|bundle|pack/iu.test(latestBuyer)
     && /(?:единиц\p{L}*\s+цен|(?<!\p{L})за\s|по\s+\d+\s+(?:шт|единиц))/iu.test(latestBuyer)
-    ? [...new Set(latestBuyer.match(/(?<![\p{L}\d-])\d{4,16}(?![\p{L}\d-])/gu) ?? [])] : [];
+    ? currentOfferIds : [];
   const installationIssue = /не (?:запуска|устанавлива|(?:удалось|уда[её]тся) скачать)|ошибк\p{L}* (?:при )?установк/iu.test(latestBuyer);
   const academicPrice = /академическ\p{L}*\s+(?:цен|скидк)/iu.test(latestBuyer);
   const asksPromotionalDiscount = !academicPrice && /скидк|специальн\p{L}*\s+услови/iu.test(latestBuyer);
@@ -161,12 +187,34 @@ export function createSupport(
       seen.add(offer.id);
       found.set(offer.id, offer);
     }
+    const referenced = referencedOfferIds.flatMap(id => {
+      const offer = found.get(id);
+      return offer ? [offer] : [];
+    });
+    if (referenced.length && referenced.length === referencedOfferIds.length) {
+      constraintReply ??= confirmedRenewalChoice(latestBuyer, referenced);
+      if (referenced.length === 1 && currentOfferIds.length === 1) {
+        const [offer] = referenced;
+        const { term, delivery } = conflictingLicenseFields(offer);
+        if ((term || delivery) && /срок|поставк|доставк|бессрочн|годов|электронн|физическ/iu.test(latestBuyer)) {
+          const fields = [
+            term && `В названии указано «${term.title}», в поле «Срок действия» — «${term.field}». Срок по карточке однозначно подтвердить нельзя.`,
+            delivery && `В поле «Способ доставки» указано «${delivery.method}», в поле «Тип поставки» — «${delivery.type}». Отсутствие физической поставки карточка не подтверждает.`,
+          ].filter(Boolean).join("\n");
+          constraintReply = `${catalogPriceLine(offer)} По снимку ${offer.availableInCatalog ? "отмечена как доступная" : "отмечена как недоступная"}.\n\n${fields}\n\nУточните ${term && delivery ? "срок лицензии и способ поставки" : term ? "срок лицензии" : "способ поставки"} у менеджера по позиции ${offer.id}.`;
+        } else if (unresolvedClientRightCoverage(requirements, offer)) {
+          constraintReply = `${catalogPriceLine(offer)} Число сотрудников, компьютеров и лицензируемых подключений — отдельные величины. По карточке нельзя определить, сколько лицензий покроет вашу схему. Уточните у правообладателя или менеджера, что считается клиентом в этой редакции и как это соотносится с вашими устройствами.`;
+        }
+      }
+      if (referenced.length > 1 && referenced.some(offer => unresolvedServerConnectionBundle(requirements, offer))) {
+        constraintReply = `${referenced.map(offer => `- ${catalogPriceLine(offer)}`).join("\n")}\n\nУправляющий сервер и подключения показаны отдельными строками. Карточка сервера не подтверждает, сколько подключений включено и требуется ли покупать их отдельно. Сверьте состав локальной поставки у менеджера по этим позициям.`;
+      }
+    }
     if (askedBundlePriceIds.length) {
       const listed = askedBundlePriceIds.flatMap(id => {
         const offer = found.get(id);
         if (!offer || offer.price === null || offer.price <= 0 || !ambiguousBundlePrice(offer)) return [];
-        const currency = /^(?:RUB|RUR)$/.test(offer.currency) ? "₽" : offer.currency;
-        return [`- Позиция ${offer.id}, ${offer.name}. Цена в снимке — ${offer.price.toLocaleString("ru-RU")} ${currency}.`];
+        return [`- ${catalogPriceLine(offer)}`];
       });
       if (listed.length === askedBundlePriceIds.length) {
         constraintReply = `${listed.join("\n")}\n\nЕдиницу цены нужно уточнить у менеджера. Число мест из названия и минимум покупки не показывают, относится цена ко всему комплекту или к одному месту. По этим карточкам нельзя подтвердить количество единиц к покупке и итоговую сумму.`;
