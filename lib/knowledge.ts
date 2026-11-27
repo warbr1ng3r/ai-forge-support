@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { normalizeSearch, type Offer } from "./catalog.ts";
+import { storeKnowledge, storeKnowledgeSource } from "./store-faq.ts";
 
 type Fact = {
   id: string;
@@ -49,10 +50,13 @@ export function lookupKnowledge(question: string) {
   // Product facts are retrieved only on a matching SKU. The catalog is authoritative for live commercial fields.
   const query = ` ${knowledgePhrase(question)} `;
   if (query.trim().length < 2) return [];
-  return db().prepare(`SELECT id, title, fact, source, kind, updatedAt FROM knowledge_facts AS entry
+  const saved = db().prepare(`SELECT id, title, fact, source FROM knowledge_facts AS entry
     WHERE EXISTS (SELECT 1 FROM json_each(entry.keywords) AS keyword
       WHERE instr(?, ' ' || keyword.value || ' ') > 0)
-    ORDER BY kind = 'manager' DESC, updatedAt DESC LIMIT 3`).all(query) as Fact[];
+    ORDER BY kind = 'manager' DESC, updatedAt DESC LIMIT 3`).all(query) as Pick<Fact, "id" | "title" | "fact" | "source">[];
+  const policies = storeKnowledge.filter(entry => entry.match.test(query)).slice(0, 3)
+    .map(({ id, title, fact }) => ({ id: `store:${id}`, title, fact, source: storeKnowledgeSource }));
+  return [...saved, ...policies];
 }
 
 export function recordConsultation(tools: readonly string[], verified: readonly Offer[], complete: boolean) {

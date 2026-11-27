@@ -37,6 +37,13 @@ try {
   assert.equal(lookupKnowledge("Подскажите условия позиции №197958.").length, 1);
   assert.equal(lookupKnowledge("Позиция 1979580").length, 0);
   assert.doesNotMatch(lookupKnowledge("SKU 197958")[0].fact, /70\s*000|₽/);
+  const certificateFacts = lookupKnowledge("Останутся ли деньги на подарочном сертификате и можно ли оплатить им доставку?");
+  assert.equal(certificateFacts[0]?.source, "https://store.softline.ru/delivery_info/");
+  assert.match(certificateFacts[0]?.fact ?? "", /одного заказа.*1%.*остаток.*доставку/);
+  assert.match(lookupKnowledge("Купил программу в Softline. Куда обратиться за технической поддержкой?")[0]?.fact ?? "",
+    /бесплатно в течение трёх месяцев.*store\.support@softline\.com.*9:00 до 18:00/);
+  assert.match(lookupKnowledge("Можно передумать и вернуть коробочную лицензию?")[0]?.fact ?? "", /семи дней/);
+  assert.equal(lookupKnowledge("Нужен сертификат ФСТЭК и техподдержка на год для Astra Linux").length, 0);
   assert.equal(knowledgeEntry.safeParse({ ...article, source: "javascript:alert(1)" }).success, false);
   assert.equal(knowledgeEntry.safeParse({ ...article, keywords: "..." }).success, false);
   assert.equal((await post()).status, 403);
