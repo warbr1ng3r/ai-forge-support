@@ -36,7 +36,8 @@ function forBrowser(chunk: UIMessageChunk, verifiedOffers: readonly Offer[], pre
   if (chunk.type !== "tool-output-available" || !chunk.output || typeof chunk.output !== "object") return chunk;
   const output = chunk.output;
   if ("offers" in output && Array.isArray(output.offers)) {
-    return { ...chunk, output: { offers: (output.offers as Offer[]).map(publicOffer) } };
+    const documentQuantity = "documentQuantity" in output ? output.documentQuantity : undefined;
+    return { ...chunk, output: { offers: (output.offers as Offer[]).map(publicOffer), documentQuantity } };
   }
   if ("candidates" in output && Array.isArray(output.candidates)) {
     const candidates = output.candidates.map(({ id, verdict }: { id: string; verdict: string }) => ({ id, verdict }));
@@ -132,7 +133,7 @@ export async function POST(request: Request) {
               ].filter(Boolean).join("\n"),
             }],
           };
-          if (stepNumber === 2) return { activeTools: ["verifyFit", "findOffer"] };
+          if (stepNumber === 2) return { activeTools: ["verifyFit", "findOffer", "prepareDocuments"] };
           if (asksAboutComponents) return { activeTools: ["searchCatalog", "discoverCatalog", "findOffer", "verifyFit"] };
         },
       },

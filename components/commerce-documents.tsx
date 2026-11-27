@@ -25,7 +25,7 @@ const quantityLabels = {
   "IP-адрес": "Количество IP-адресов",
 }
 
-export function CommerceDocuments({ offer }: { offer: CatalogOffer }) {
+export function CommerceDocuments({ offer, quantity }: { offer: CatalogOffer; quantity?: number }) {
   const formId = useId()
   const [pending, setPending] = useState<"quote" | "invoice" | null>(null)
   const [error, setError] = useState("")
@@ -97,7 +97,7 @@ export function CommerceDocuments({ offer }: { offer: CatalogOffer }) {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {quantityLabel}
-              <Input name="quantity" type="number" defaultValue={offer.priceUnit ? undefined : 1} min={range?.min ?? 1} max={range?.max} step={1} required
+              <Input name="quantity" type="number" defaultValue={quantity ?? (offer.priceUnit ? undefined : 1)} min={range?.min ?? 1} max={range?.max} step={1} required
                 placeholder={offer.priceUnit ? "Укажите количество" : undefined}
                 aria-describedby={range || isPackage ? `${formId}-quantity` : undefined} />
               {(range || isPackage) && <span id={`${formId}-quantity`} className="text-xs font-normal text-muted-foreground">

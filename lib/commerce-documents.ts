@@ -38,7 +38,11 @@ function pricingUnit(offer: Offer, quantity: number): { label: string } | { erro
   }
 
   const bounds = description.match(/(?:^| • )минимальная покупка: от ([1-9]\d*)(?: до ([1-9]\d*))? шт\.?(?=$| • )/u);
-  const pricedPerItem = /цена за 1\s+(?:шт\.|лицензию|подписку|дистрибутив|экземпляр)(?!\p{L})/u.test(name);
+  const pricedPerBundle = /цена за (?:комплект|пакет)(?!\p{L})/u.test(`${name} ${description}`);
+  const pricedPerItem = pricedPerBundle || /цена за 1\s+(?:шт\.|лицензию|подписку|дистрибутив|экземпляр)(?!\p{L})/u.test(name);
+  if (/\b(?:bundle|package)\b|(?<!\p{L})комплект(?!\p{L})/u.test(name) && !pricedPerItem) {
+    return { error: "Единицу цены комплекта уточните у магазина." };
+  }
   if (!bounds && !pricedPerItem) {
     return { error: "В карточке не указаны условия расчёта количества. Уточните их у магазина." };
   }
@@ -133,26 +137,27 @@ function documentHtml(request: DocumentRequest, offer: Offer, unit: string, pric
 </html>`;
 }
 
+export function prepareCommerceDocument(offer: Offer, quantity: number):
+  { error: string } | { unit: { label: string }; amount: { unitKopecks: number; totalKopecks: number } } {
+  if (offer.price === null || offer.price <= 0) return { error: "Для этой позиции нет подтверждённой цены в каталоге." };
+  if (!["RUB", "RUR"].includes(offer.currency)) return { error: "Подтверждённая цена в рублях для этой позиции отсутствует." };
+  const unit = pricingUnit(offer, quantity);
+  if ("error" in unit) return { error: unit.error };
+  const amount = rubleTotals(offer.price, offer.currency, quantity);
+  if (!amount) return { error: "Сумму для указанного количества рассчитать не удалось." };
+  return { unit, amount };
+}
+
 export function createCommerceDocument(request: DocumentRequest): { filename: string; html: string } | { error: string; status: number } {
   const catalog = openCatalog();
   try {
     const offer = catalog.find(request.offerId).find(item => item.id === request.offerId);
     if (!offer) return { error: "Позиция не найдена в каталоге.", status: 404 };
-    if (offer.price === null || offer.price <= 0) {
-      return { error: "Для этой позиции нет подтверждённой цены в каталоге.", status: 422 };
-    }
-    if (!["RUB", "RUR"].includes(offer.currency)) {
-      return { error: "Подтверждённая цена в рублях для этой позиции отсутствует.", status: 422 };
-    }
-    const unit = pricingUnit(offer, request.quantity);
-    if ("error" in unit) return { error: unit.error, status: 422 };
-    const amount = rubleTotals(offer.price, offer.currency, request.quantity);
-    if (!amount) {
-      return { error: "Сумму для указанного количества рассчитать не удалось.", status: 422 };
-    }
+    const pricing = prepareCommerceDocument(offer, request.quantity);
+    if ("error" in pricing) return { error: pricing.error, status: 422 };
     return {
       filename: `${request.type}-${offer.id}.html`,
-      html: documentHtml(request, offer, unit.label, amount.unitKopecks, amount.totalKopecks),
+      html: documentHtml(request, offer, pricing.unit.label, pricing.amount.unitKopecks, pricing.amount.totalKopecks),
     };
   } finally {
     catalog.close();

@@ -59,6 +59,7 @@ function catalogLink(value: string) {
 export function ProductCandidates({ parts, allowDocuments = false }: { parts: UIMessage["parts"]; allowDocuments?: boolean }) {
   const found = new Map<string, z.infer<typeof offerSchema>>()
   const assessments = new Map<string, keyof typeof verdicts>()
+  const documentQuantities = new Map<string, number>()
   for (const part of parts) {
     if (!isToolUIPart(part) || part.state !== "output-available") continue
     const tool = getToolName(part)
@@ -67,7 +68,7 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
       const checked = assessmentSchema.safeParse(result)
       if (!checked.success) continue
       for (const { id, verdict } of checked.data.candidates) assessments.set(id, verdict)
-    } else if (!["searchCatalog", "discoverCatalog", "findOffer"].includes(tool)) {
+    } else if (!["searchCatalog", "discoverCatalog", "findOffer", "prepareDocuments"].includes(tool)) {
       continue
     }
     if (!result || typeof result !== "object" || !("offers" in result) || !Array.isArray(result.offers)) continue
@@ -75,6 +76,10 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
       const offer = offerSchema.safeParse(value)
       if (offer.success && (tool !== "verifyFit" || assessments.get(offer.data.id) === "fit")) {
         found.set(offer.data.id, offer.data)
+        if (tool === "prepareDocuments" && "documentQuantity" in result &&
+          typeof result.documentQuantity === "number" && Number.isSafeInteger(result.documentQuantity) && result.documentQuantity > 0) {
+          documentQuantities.set(offer.data.id, result.documentQuantity)
+        }
       }
     }
   }
@@ -90,9 +95,10 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
       {shown.map((offer) => {
         const url = catalogLink(offer.url)
         const currency = offer.currency === "RUR" || offer.currency === "RUB" ? "₽" : offer.currency
-        const priceUnit = offer.priceUnit ?? (offer.maxUsers && offer.maxUsers > 1 ? "пакет" : undefined)
+        const priceUnit = offer.priceUnit
         const price = offer.price ? `${priceFormat.format(offer.price)} ${currency}${priceUnit ? ` за ${priceUnit}` : ""}` : "Цена не указана"
         const verdict = assessments.get(offer.id)
+        const documentQuantity = documentQuantities.get(offer.id)
 
         return (
           <li key={offer.id} className="min-w-0">
@@ -125,7 +131,8 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
                   )}
                   {!verdict && assessments.size > 0 && <Badge variant="outline">Соответствие не проверено</Badge>}
                 </div>
-                {allowDocuments && verdict === "fit" && <CommerceDocuments offer={offer} />}
+                {allowDocuments && (documentQuantity !== undefined || verdict === "fit") &&
+                  <CommerceDocuments offer={offer} quantity={documentQuantity} />}
               </CardContent>
             </Card>
           </li>

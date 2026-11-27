@@ -67,6 +67,9 @@ try {
   assert.match(await documentText(ipQuote), /43 500,00 ₽/u);
   assert.equal((await request({ ...quote, offerId: "143402", quantity: 9 })).status, 422);
   assert.equal((await request({ ...quote, offerId: "3850", quantity: 49 })).status, 422);
+  const ambiguousBundle = await request({ ...quote, offerId: "542049", quantity: 1 });
+  assert.equal(ambiguousBundle.status, 422);
+  assert.match(await ambiguousBundle.text(), /Единицу цены комплекта уточните/);
   assert.equal((await request({ ...quote, offerId: "9999999999999999" })).status, 404);
   for (const input of [{ quantity: 0 }, { quantity: 1.5 }, { buyer: "   " }, { buyerInn: "123" }]) {
     assert.equal((await request({ ...quote, ...input })).status, 400);
