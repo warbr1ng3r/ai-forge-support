@@ -151,7 +151,7 @@ function documentHtml(request: DocumentRequest, offer: Offer, unit: string, pric
 
 export function prepareCommerceDocument(offer: Offer, quantity: number):
   { error: string } | { unit: { label: string }; amount: { unitKopecks: number; totalKopecks: number } } {
-  if (offer.price === null || offer.price <= 0) return { error: "Для этой позиции нет подтверждённой цены в каталоге." };
+  if (offer.price === null || offer.price <= 0) return { error: "Для этой позиции нет подтверждённой цены. Обратитесь к менеджеру магазина." };
   if (!["RUB", "RUR"].includes(offer.currency)) return { error: "Подтверждённая цена в рублях для этой позиции отсутствует." };
   const unit = pricingUnit(offer, quantity);
   if ("error" in unit) return { error: unit.error };

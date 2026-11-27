@@ -47,16 +47,21 @@ try {
   assert.match(invoiceHtml, /Итог к оплате<\/dt><dd>Не согласован/u);
 
   for (const type of ["quote", "invoice"]) {
-    const unavailable = await request({ ...quote, type, offerId: "100599", quantity: 1 });
+    const unavailable = await request({ ...quote, type, offerId: "125279", quantity: 1 });
     assert.equal(unavailable.status, 200, type);
-    assert.equal(unavailable.headers.get("Content-Disposition"), `attachment; filename="${type}-100599.html"`);
+    assert.equal(unavailable.headers.get("Content-Disposition"), `attachment; filename="${type}-125279.html"`);
     const html = await documentText(unavailable);
-    assert.match(html, /26 000,00 ₽/u);
+    assert.match(html, /3 904,00 ₽/u);
     assert.match(html, /Фактическую поставку подтверждает менеджер\./u);
     assert.match(html, /Демо-документ\. Для согласования\. Не для оплаты\./u);
+
+    const stale = await request({ ...quote, type, offerId: "100599", quantity: 1 });
+    assert.equal(stale.status, 422, type);
+    assert.equal(stale.headers.get("Content-Disposition"), null);
+    assert.match(await stale.text(), /Обратитесь к менеджеру магазина/u);
   }
 
-  for (const offerId of ["100599", "365609", "477554", "222179"]) {
+  for (const offerId of ["100599", "48094", "365609", "477554", "222179"]) {
     const rejected = await request({ ...quote, offerId, quantity: 65 });
     assert.equal(rejected.status, 422, offerId);
     assert.equal(rejected.headers.get("Content-Disposition"), null, offerId);
@@ -94,8 +99,8 @@ try {
   assert.deepEqual(events.toReversed(), [
     { action: "Сформировано КП", details: { offerId: "19579", count: 2 } },
     { action: "Сформирован проект счёта", details: { offerId: "222182", count: 65 } },
-    { action: "Сформировано КП", details: { offerId: "100599", count: 1 } },
-    { action: "Сформирован проект счёта", details: { offerId: "100599", count: 1 } },
+    { action: "Сформировано КП", details: { offerId: "125279", count: 1 } },
+    { action: "Сформирован проект счёта", details: { offerId: "125279", count: 1 } },
     { action: "Сформировано КП", details: { offerId: "143402", count: 10 } },
     { action: "Сформировано КП", details: { offerId: "532976", count: 4 } },
     { action: "Сформирован проект счёта", details: { offerId: "532973", count: 12 } },

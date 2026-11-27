@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { createUIMessageStreamResponse, type UIMessageChunk } from "ai";
+import { createUIMessageStream, createUIMessageStreamResponse, type UIMessageChunk } from "ai";
 import { handleChatStream } from "@mastra/ai-sdk";
 import { z } from "zod";
 import { articleQuantityBounds, catalogPath, quantityBounds, type Offer } from "../../../lib/catalog.ts";
@@ -27,6 +27,23 @@ const availabilityQuestion = new RegExp(
 );
 const componentQuestion = /что\s+(?:относится\s+к|входит\s+в)\s+[^.!?\n:;]{1,120}?,?\s+а\s+что\s+(?:[кв]\s|(?:ид[её]т|покупается)\s+отдельно)/iu;
 const documentQuestion = /(?<!\p{L})(?:кп|коммерческ\p{L}*\s+предложени\p{L}*|проект\s+сч[её]та|(?:подготов\p{L}*|выстав\p{L}*|оформ\p{L}*)\s+сч[её]т)(?!\p{L})/iu;
+const storeReference = /(?:на|с)\s+(?:самом\s+)?(?:сайт|витрин)|актуальн\p{L}*\s+карточк|карточк\p{L}*\s+(?:магазина|на\s+сайте)|store\.softline\.ru/iu;
+const snapshotReference = /фид|снимок|снимк|выгрузк|исходн\p{L}*\s+каталог|(?:ваш\p{L}*\s+каталог|в\s+(?:этом|вашем)\s+чате|вы\s+(?:указали|показали|назвали))/iu;
+const priceOnRequest = /запросить\s+цену|цен[ау]\s+по\s+запросу|(?:цену|цен[аы])\s+(?:не\s+(?:указ|показыва)|скрыт)|нет\s+цены/iu;
+const priceDifference = /расхожд|расходя|не\s+совпада|отлича|(?:другая|иная|новая|выше|ниже|другая\s+сумма)\s+(?:цен|стоимост)|цен[аыу]\s+(?:другая|иная|выше|ниже)/iu;
+const positionIds = (text: string): string[] =>
+  text.match(/(?<![\p{L}\p{N}-])\d{4,16}(?![\p{L}\p{N}-]|\s*(?:₽|руб))/giu) ?? [];
+
+function reportsPriceConflict(text: string) {
+  if (!storeReference.test(text) || !/(?:цен|стоимост|₽|рубл)/iu.test(text)) return false;
+  if (!snapshotReference.test(text)) return false;
+  if (priceDifference.test(text) || priceOnRequest.test(text)) return true;
+  const amounts = [...text.matchAll(/(?<!\d)(\d+(?:[\p{Zs}]\d{3})*(?:[.,]\d{1,2})?)\s*(?:₽|руб\p{L}*)/giu)]
+    .map(([, amount]) => Number(amount.replace(/\p{Zs}/gu, "").replace(",", ".")));
+  return new Set(amounts).size > 1;
+}
+
+const priceConflictReply = "Вы указали расхождение между ценой на витрине и данными снимка. Для актуальной цены приоритет у витрины магазина. До подтверждения цены демо-КП и проект счёта недоступны. Нажмите «Передать менеджеру» или свяжитесь с [менеджером магазина](https://store.softline.ru/contacts/).";
 
 function verifiedDocumentReply([offer, other]: readonly Offer[]) {
   if (!offer || other || catalogPriceUnit(offer.name)) return;
@@ -92,10 +109,36 @@ export async function POST(request: Request) {
     return new Response("Введите вопрос или опишите задачу.", { status: 400 });
   }
   const latestText = latest.parts.map(part => part.text).join("\n");
+  const priorBuyer = messages.slice(0, -1).filter(message => message.role === "user")
+    .map(message => message.parts.map(part => part.text).join("\n"));
   const asksAvailability = availabilityQuestion.test(latestText)
     && /\b[a-z][a-z0-9-]{2,}\b/i.test(latestText);
   const asksAboutComponents = componentQuestion.test(latestText);
   const asksForDocuments = documentQuestion.test(latestText);
+  const latestIds = positionIds(latestText);
+  const samePosition = /(?:вс[её]\s+равно|вс[её][-\s]+таки|тогда|(?:для|на|по)\s+эт\p{L}*\s+(?:позици|товар|лицензи)|то\s+же)(?!\p{L})/iu;
+  const standaloneDocumentRequest = /^(?:дайте|сделайте|подготовьте|выставьте|оформите)\s+(?:демо[-\s]+)?(?:кп|сч[её]т|проект\s+сч[её]та)[.!?]*$/iu;
+  const reportsSamePriceConflict = latestIds.length > 0
+    ? priorBuyer.some(text => reportsPriceConflict(text) && positionIds(text).some(id => latestIds.includes(id)))
+    : (samePosition.test(latestText) || standaloneDocumentRequest.test(latestText.trim()))
+      && reportsPriceConflict(priorBuyer.at(-1) ?? "");
+  if (reportsPriceConflict(latestText) || (asksForDocuments && reportsSamePriceConflict)) {
+    try {
+      recordConsultation([], [], true);
+    } catch {
+      console.warn("Не удалось записать результат консультации.");
+    }
+    return createUIMessageStreamResponse({ stream: createUIMessageStream({
+      execute({ writer }) {
+        const id = "price-conflict";
+        writer.write({ type: "start" });
+        writer.write({ type: "text-start", id });
+        writer.write({ type: "text-delta", id, delta: priceConflictReply });
+        writer.write({ type: "text-end", id });
+        writer.write({ type: "finish", finishReason: "stop" });
+      },
+    }) });
+  }
   let remaining = 6000;
   const turns: string[] = [];
   for (const message of messages.toReversed()) {

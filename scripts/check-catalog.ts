@@ -26,8 +26,11 @@ try {
   assert.equal(missing.price, null);
   assert.equal(missing.availableInCatalog, false);
   assert.ok(unavailable);
-  assert.ok(unavailable.price !== null && unavailable.price > 0);
+  assert.equal(pricedUnavailableId, "100599");
+  assert.equal(unavailable.price, null, "A price on request on the storefront overrides the snapshot");
   assert.equal(unavailable.availableInCatalog, false);
+  assert.equal(catalog.find("48094")[0]?.price, null);
+  assert.equal(catalog.find("125279")[0]?.price, 3_904);
 
   for (const offers of [
     catalog.search("Astra Linux Воронеж"),

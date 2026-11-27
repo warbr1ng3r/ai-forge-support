@@ -24,10 +24,14 @@ type OfferRow = {
   description: string;
 };
 
+// These Softline storefront cards were checked and request a quote despite a priced snapshot.
+const quoteOnlyOfferIds = new Set(["100599", "48094"]);
+
 function toOffer(row: OfferRow, descriptionLimit: number) {
+  const price = quoteOnlyOfferIds.has(row.id) ? null : row.price;
   return {
     id: row.id, name: row.name, vendor: row.vendor, article: row.article,
-    category: row.category, url: row.url, price: row.price, currency: row.currency,
+    category: row.category, url: row.url, price, currency: row.currency,
     availableInCatalog: row.available === 1,
     maxUsers: row.users, licenseOperation: row.license_operation,
     parameters: JSON.parse(row.parameters) as Record<string, string[]>,

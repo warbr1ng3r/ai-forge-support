@@ -799,6 +799,21 @@ try {
   assert.match(agentDiscountStream, /скидка помощника до 5% не суммируется с купоном, акцией или корпоративной ценой/iu);
   assert.match(agentDiscountStream, /Исключения для совмещения других скидок этого ограничения не меняют/);
   assert.match(agentDiscountStream, /"finishReason":"stop"/);
+  const reported = message("reported-price", "user", "У позиции 100599 в фиде 26 000 ₽, а на актуальной карточке магазина написано «Запросить цену». Можно ли обещать цену клиенту?");
+  for (const conversation of [
+    [reported],
+    [reported, message("price-reply", "assistant", "Цену должен подтвердить менеджер."), message("try-draft", "user", "Можно ли всё-таки скачать демо-КП?")],
+    [message("different-prices", "user", "У позиции 197958 в снимке 70 000 ₽, а на сайте 72 000 ₽. Подготовьте проект счёта.")],
+  ]) {
+    const response = await post({ messages: conversation });
+    assert.equal(response.status, 200);
+    const result = await response.text();
+    assert.match(result, /приоритет у витрины магазина/);
+    assert.match(result, /демо-КП и проект счёта недоступны/);
+    assert.match(result, /Передать менеджеру/);
+    assert.match(result, /"finishReason":"stop"/);
+    assert.doesNotMatch(result, /"type":"(?:error|tool-input-available|tool-output-available)"|(?:26|70|72)\s000 ₽/);
+  }
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;
