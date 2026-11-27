@@ -10,7 +10,9 @@
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "catalog:import": "node scripts/import-catalog.ts",
+    "catalog:check": "node scripts/check-catalog.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.94",
