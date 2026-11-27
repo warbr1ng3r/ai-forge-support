@@ -4,7 +4,7 @@ import { Mastra } from "@mastra/core/mastra";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { coversQuantityTier, normalizeSearch, openCatalog, operations, quantityBounds, rubleTotals, type Offer } from "./catalog.ts";
-import { prepareCommerceDocument } from "./commerce-documents.ts";
+import { ambiguousBundlePrice, prepareCommerceDocument } from "./commerce-documents.ts";
 import { assessFit, astraEditionFromOfferName, astraEditionScope, buyerType, isCspTls, isSubscriptionExpansion, readUserTurns, requestsStandardCsp, scannerUnitFromName, scannerUnitScope, unresolvedAstraGuestRights } from "./decision.ts";
 import { lookupKnowledge } from "./knowledge.ts";
 import { anyDeskFacts, astraFileProtectionFacts, catalogPriceUnit, continentTlsFacts, contentReaderLicensingFacts, drWebEducationFacts, drWebServerLicensing, mDaemonFacts, originProFacts, procurementDocuments, r7MacroFacts, ruPostFacts, securityProductEvidence, securitySearchNotes, storeEdoFacts, storeFacts } from "./store-faq.ts";
@@ -69,6 +69,9 @@ export function createSupport(
   const buyerTurns = readUserTurns(requirements);
   const buyerText = buyerTurns.join("\n");
   const latestBuyer = buyerTurns.at(-1) ?? "";
+  const askedBundlePriceIds = /цен|стоимост/iu.test(latestBuyer) && /комплект|пакет|набор|bundle|pack/iu.test(latestBuyer)
+    && /(?:единиц\p{L}*\s+цен|(?<!\p{L})за\s|по\s+\d+\s+(?:шт|единиц))/iu.test(latestBuyer)
+    ? [...new Set(latestBuyer.match(/(?<![\p{L}\d-])\d{4,16}(?![\p{L}\d-])/gu) ?? [])] : [];
   const installationIssue = /не (?:запуска|устанавлива|(?:удалось|уда[её]тся) скачать)|ошибк\p{L}* (?:при )?установк/iu.test(latestBuyer);
   const academicPrice = /академическ\p{L}*\s+(?:цен|скидк)/iu.test(latestBuyer);
   const asksPromotionalDiscount = !academicPrice && /скидк|специальн\p{L}*\s+услови/iu.test(latestBuyer);
@@ -138,7 +141,7 @@ export function createSupport(
       securityProductEvidence(offer),
       /\bbusiness basic\b.*(?:advanced (?:compliance|threat protection)|data loss prevention|extra file storage)/i.test(offer.name)
         ? "Дополнение к Microsoft 365 Business Basic. Срок и число мест относятся к дополнению. Базовая лицензия в состав не входит." : "",
-      offer.price !== null && !priceUnit && /(?<!\p{L})(?:комплект|пакет|набор|bundle|pack)(?!\p{L})/iu.test(offer.name)
+      offer.price !== null && ambiguousBundlePrice(offer)
         ? "Число мест в названии и минимальная покупка не определяют единицу цены. При отсутствии явной единицы указана цена позиции по снимку, стоимость всего заказа требует уточнения." : "",
       offer.licenseOperation === "renewal"
         ? "Тип операции сам по себе не подтверждает требования к действующему сроку исходной лицензии, совпадение артикулов или существование отдельного тарифа после истечения срока." : "",
@@ -157,6 +160,17 @@ export function createSupport(
     for (const offer of offers) {
       seen.add(offer.id);
       found.set(offer.id, offer);
+    }
+    if (askedBundlePriceIds.length) {
+      const listed = askedBundlePriceIds.flatMap(id => {
+        const offer = found.get(id);
+        if (!offer || offer.price === null || offer.price <= 0 || !ambiguousBundlePrice(offer)) return [];
+        const currency = /^(?:RUB|RUR)$/.test(offer.currency) ? "₽" : offer.currency;
+        return [`- Позиция ${offer.id}, ${offer.name}. Цена в снимке — ${offer.price.toLocaleString("ru-RU")} ${currency}.`];
+      });
+      if (listed.length === askedBundlePriceIds.length) {
+        constraintReply = `${listed.join("\n")}\n\nЕдиницу цены нужно уточнить у менеджера. Число мест из названия и минимум покупки не показывают, относится цена ко всему комплекту или к одному месту. По этим карточкам нельзя подтвердить количество единиц к покупке и итоговую сумму.`;
+      }
     }
     if (concurrentVolume && offers.some(offer => /content\s*reader.*\bconcurrent\b/i.test(offer.name) && offer.maxUsers === null)) {
       constraintReply = `Конкурентная лицензия есть в снимке каталога. Поставку и итоговую стоимость на весь объём подтвердить не удалось. ${contentReaderLicensingFacts.trim()}`;

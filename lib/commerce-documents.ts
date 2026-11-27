@@ -21,6 +21,14 @@ const units = {
   "IP-адрес": "IP-адрес",
 };
 
+const includesBundle = /\b(?:bundle|pack|package)\b|(?<!\p{L})(?:комплект|пакет|набор)(?!\p{L})/iu;
+const explicitItemPrice = /цена за (?:(?:комплект|пакет|набор)|1\s+(?:шт\.|лицензию|подписку|дистрибутив|экземпляр))(?!\p{L})/iu;
+
+export function ambiguousBundlePrice(offer: Offer) {
+  return includesBundle.test(offer.name) && !catalogPriceUnit(offer.name)
+    && !explicitItemPrice.test(`${offer.name} ${offer.description}`);
+}
+
 function pricingUnit(offer: Offer, quantity: number): { label: string } | { error: string } {
   const catalogUnit = catalogPriceUnit(offer.name);
   if (catalogUnit) {
@@ -38,9 +46,8 @@ function pricingUnit(offer: Offer, quantity: number): { label: string } | { erro
   }
 
   const bounds = description.match(/(?:^| • )минимальная покупка: от ([1-9]\d*)(?: до ([1-9]\d*))? шт\.?(?=$| • )/u);
-  const pricedPerBundle = /цена за (?:комплект|пакет)(?!\p{L})/u.test(`${name} ${description}`);
-  const pricedPerItem = pricedPerBundle || /цена за 1\s+(?:шт\.|лицензию|подписку|дистрибутив|экземпляр)(?!\p{L})/u.test(name);
-  if (/\b(?:bundle|package)\b|(?<!\p{L})комплект(?!\p{L})/u.test(name) && !pricedPerItem) {
+  const pricedPerItem = explicitItemPrice.test(`${name} ${description}`);
+  if (ambiguousBundlePrice(offer)) {
     return { error: "Единицу цены комплекта уточните у магазина." };
   }
   if (!bounds && !pricedPerItem) {

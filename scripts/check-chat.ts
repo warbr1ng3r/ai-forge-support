@@ -38,7 +38,7 @@ const installationQuestion = "Лицензия видна в аккаунте, �
 const promotionQuestion = "У производителя есть специальные условия для небольших компаний. Вы можете подтвердить скидку?";
 const privatePurchaseQuestion = "Я самозанятый без ИП. Могу купить электронную лицензию как физлицо? Продукт ещё не выбрал.";
 const renewalQuestion = "Проверьте СКАНЕР-ВС 7, позицию 486969. Это продление Enterprise на год и на 2048 активов? Какова цена в каталоге?";
-const bundlePriceQuestion = "ТИМ КРЕДО Проектирование на 11 рабочих мест, позиция 438375. Это цена за весь комплект или за одно место?";
+const bundlePriceQuestion = "ТИМ КРЕДО на 11 рабочих мест, позиции 438375 и 542049. Это цена за весь комплект или за одно место?";
 const endpoint = "http://localhost/api/chat";
 const post = (body: unknown) => POST(new Request(endpoint, { method: "POST", body: JSON.stringify(body) }));
 
@@ -105,17 +105,11 @@ globalThis.fetch = async (input, init) => {
   }
   const tool = body.messages.findLast(turn => turn.role === "tool");
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(bundlePriceQuestion))) {
-    if (tool) {
-      const [offer] = JSON.parse(tool.content).offers;
-      assert.equal(offer.id, "438375");
-      assert.equal(offer.price, 70_000);
-      assert.match(offer.description, /минимальная покупка не определяют единицу цены/iu);
-      return stream({ content: "Цена позиции 70 000 ₽. Единицу цены нужно уточнить." }, "stop");
-    }
-    return stream({ tool_calls: [{
-      index: 0, id: "fixture_bundle_price", type: "function",
-      function: { name: "findOffer", arguments: '{"id":"438375"}' },
-    }] }, "tool_calls");
+    assert.equal(tool, undefined, "Bundle price must resolve from the catalogue without an inferred unit");
+    return stream({ tool_calls: ["438375", "542049"].map((id, index) => ({
+      index, id: `fixture_bundle_price_${id}`, type: "function",
+      function: { name: "findOffer", arguments: JSON.stringify({ id }) },
+    })) }, "tool_calls");
   }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(renewalQuestion))) {
     if (tool) {
@@ -618,7 +612,9 @@ try {
   const bundle = await post({ messages: [message("bundle-price", "user", bundlePriceQuestion)] });
   const bundleStream = await bundle.text();
   assert.match(bundleStream, /"id":"438375"/);
+  assert.match(bundleStream, /"id":"542049"/);
   assert.match(bundleStream, /Единицу цены нужно уточнить/);
+  assert.match(bundleStream, /нельзя подтвердить количество единиц к покупке и итоговую сумму/);
   const renewal = await post({ messages: [message("renewal-eligibility", "user", renewalQuestion)] });
   const renewalStream = await renewal.text();
   assert.match(renewalStream, /"id":"486969"/);
