@@ -28,7 +28,8 @@ const mentionedOfferIds = (text: string) => [...new Set(text.match(/(?<![\p{L}\d
 function catalogPriceLine(offer: Offer) {
   const currency = /^(?:RUB|RUR)$/.test(offer.currency) ? "₽" : offer.currency;
   const price = offer.price != null && offer.price > 0 ? `Цена в снимке — ${offer.price.toLocaleString("ru-RU")} ${currency}.` : "Цена в снимке не указана.";
-  return `Позиция ${offer.id}, ${plainText(offer.name)}. ${price}`;
+  const name = plainText(offer.name).trim().replace(/[.,:;]+$/u, "");
+  return `Позиция ${offer.id}, ${name}. ${price}`;
 }
 
 function articleTierPrice(offers: Offer[], quantity: number) {
@@ -113,6 +114,12 @@ export function createSupport(
   const currentOfferIds = mentionedOfferIds(latestBuyer);
   const referencedOfferIds = currentOfferIds.length ? currentOfferIds
     : buyerTurns.slice(0, -1).toReversed().map(mentionedOfferIds).find(ids => ids.length) ?? [];
+  const needsEngineeringDetails = buyerTurns.length === 1 && !currentOfferIds.length
+    && /(?:состав|структур\p{L}*)\s+издели/iu.test(latestBuyer)
+    && /версии|чертеж|сапр|\bcad\b/iu.test(latestBuyer)
+    && /(?:какие|что)\s+(?:еще\s+)?(?:данные|детали|параметры|уточнить)/iu.test(latestBuyer);
+  const baseLicenseQuote = /(?<!\p{L})(?:кп|коммерческ\p{L}*\s+предложени\p{L}*|сч[её]т)(?!\p{L})/iu.test(latestBuyer)
+    && /(?:основн\p{L}*|базов\p{L}*|сам[ау]?)\s+(?:лицензи|редактор|программ|продукт)/iu.test(latestBuyer);
   const askedBundlePriceIds = /цен|стоимост/iu.test(latestBuyer) && /комплект|пакет|набор|bundle|pack/iu.test(latestBuyer)
     && /(?:единиц\p{L}*\s+цен|(?<!\p{L})за\s|по\s+\d+\s+(?:шт|единиц))/iu.test(latestBuyer)
     ? currentOfferIds : [];
@@ -229,6 +236,9 @@ export function createSupport(
     if (asksTierPrice) constraintReply ??= articleTierPrice(referenced, licenseQuantity);
     if (referenced.length && referenced.length === referencedOfferIds.length) {
       constraintReply ??= confirmedRenewalChoice(latestBuyer, referenced);
+      if (baseLicenseQuote && referenced.every(offer => /(?<!\p{L})(?:плагин|plugin\b|надстройк|add-on\b)/iu.test(offer.name))) {
+        constraintReply ??= `${referenced.map(offer => `- ${catalogPriceLine(offer)}`).join("\n")}\n\nЭти дополнения не подтверждают право на сам продукт. Цена основной лицензии по этим позициям не подтверждена. Чтобы получить КП именно на основной продукт, обратитесь к [менеджеру магазина](https://store.softline.ru/contacts/) или передайте вопрос из чата.`;
+      }
       if (referenced.length === 1 && currentOfferIds.length === 1) {
         const [offer] = referenced;
         const { term, delivery } = conflictingLicenseFields(offer);
@@ -481,6 +491,7 @@ ${asksPromotionalDiscount ? `${discountTerms} При необходимости 
   return {
     mastra: new Mastra({ agents: { [agentId]: agent } }),
     needsExpansionDetails,
+    needsEngineeringDetails,
     catalogReplyInstructions: () => {
       if (!found.size) return "";
       return [

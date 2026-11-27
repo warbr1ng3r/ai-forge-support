@@ -110,7 +110,7 @@ export async function POST(request: Request) {
   const previousOfferIds = [...new Set(parsed.data.previousOfferIds)];
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]);
   try {
-    const { mastra, needsExpansionDetails, catalogReplyInstructions, catalogGroups, catalogAssessment, catalogConstraintReply, catalogGap, answerNotes, verifiedOffers } =
+    const { mastra, needsExpansionDetails, needsEngineeringDetails, catalogReplyInstructions, catalogGroups, catalogAssessment, catalogConstraintReply, catalogGap, answerNotes, verifiedOffers } =
       createSupport(apiKey, requirements, signal, previousOfferIds);
     const stream = await handleChatStream({
       mastra,
@@ -123,12 +123,14 @@ export async function POST(request: Request) {
         stopWhen: () => Boolean(catalogGroups() || catalogConstraintReply()),
         modelSettings: { maxOutputTokens: 2048, timeout: { stepMs: 18_000, totalMs: 36_000 } },
         prepareStep: ({ stepNumber, systemMessages }) => {
-          if (stepNumber === 0 && needsExpansionDetails) return {
+          if (stepNumber === 0 && (needsExpansionDetails || needsEngineeringDetails)) return {
             activeTools: [],
             toolChoice: "none",
             systemMessages: [...systemMessages, {
               role: "system",
-              content: "Это расширение действующей подписки без идентификатора текущей поставки. Поясни, почему отдельная покупка дополнительного количества сама по себе не подтверждает расширение. Уточни артикул или редакцию текущей подписки и дату её окончания. Сохрани названное клиентом дополнительное количество. Не делай выводов о наличии, цене или составе каталога без поиска.",
+              content: needsExpansionDetails
+                ? "Это расширение действующей подписки без идентификатора текущей поставки. Поясни, почему отдельная покупка дополнительного количества сама по себе не подтверждает расширение. Уточни артикул или редакцию текущей подписки и дату её окончания. Сохрани названное клиентом дополнительное количество. Не делай выводов о наличии, цене или составе каталога без поиска."
+                : "Назови управление версиями документации и составом изделия (PDM/PLM) как направление подбора. Уточни, в какой САПР работает покупатель, есть ли у него PLM/PDM, какая именно и сколько рабочих мест нужно подключить. Не предполагай конкретный продукт, учебную редакцию или обновление до уточнения.",
             }],
           };
           if (stepNumber === 0 && asksAvailability) return {
