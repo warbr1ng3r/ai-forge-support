@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { ArrowUpRightIcon, PackageSearchIcon } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRightIcon, PackageSearchIcon, UserRoundIcon } from "lucide-react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -43,6 +44,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                       Каталог <span className="hidden min-[355px]:inline">Softline</span>
                       <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
                     </a>
+                    <Link href="/manager" aria-label="Раздел менеджера" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                      <UserRoundIcon className="size-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Менеджер</span>
+                    </Link>
                     <ThemeToggle />
                   </div>
                 </div>

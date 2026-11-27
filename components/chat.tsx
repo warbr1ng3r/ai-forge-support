@@ -6,6 +6,7 @@ import { LayersIcon } from "lucide-react"
 import { useRef, useState } from "react"
 
 import { ChatMessage } from "@/components/chat-message"
+import { ChatHandoff, HandoffReplies, useHandoffReceipts } from "@/components/chat-handoff"
 import { PromptForm } from "@/components/prompt-form"
 import { StatusIcon } from "@/components/status-icon"
 import { Suggestions } from "@/components/suggestions"
@@ -67,11 +68,15 @@ function errorText(message: string) {
 
 export function Chat() {
   const { messages, sendMessage, regenerate, status, stop, error, clearError } = useChat({ transport, throttle: 50 })
+  const { receipts, addReceipt } = useHandoffReceipts()
   const [draft, setDraft] = useState("")
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const isBusy = status === "submitted" || status === "streaming"
   const lastMessage = messages.at(-1)
+  const lastUserId = messages.findLast(message => message.role === "user")?.id
+  const currentHandoffId = lastUserId ? `chat-${lastUserId}` : undefined
   const hasMessages = messages.length > 0
+  const hasConversation = hasMessages || receipts.length > 0
   const waitingForText = isBusy && (lastMessage?.role !== "assistant"
     || !lastMessage.parts.some((part) => part.type === "text" && part.text.trim()))
 
@@ -99,7 +104,7 @@ export function Chat() {
       </p>
       <MessageScrollerProvider>
         <MessageScroller className="flex-1">
-          {hasMessages ? (
+          {hasConversation ? (
             <MessageScrollerViewport aria-label="Переписка" className="flex-1 [mask-image:none]">
               <MessageScrollerContent className="chat-column flex flex-col gap-5 py-4 sm:gap-6 sm:py-6">
                 {messages.map((message) => (
@@ -120,6 +125,14 @@ export function Chat() {
                       </MessageContent>
                     </Message>
                   </MessageScrollerItem>
+                )}
+                {receipts.map(receipt => (
+                  <MessageScrollerItem key={receipt.id} messageId={receipt.id}>
+                    <HandoffReplies receipt={receipt} focus={receipt.id === currentHandoffId} />
+                  </MessageScrollerItem>
+                ))}
+                {lastUserId && !isBusy && !receipts.some(receipt => receipt.id === currentHandoffId) && (
+                  <ChatHandoff key={lastUserId} requestId={lastUserId} messages={messages} onSent={addReceipt} />
                 )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
@@ -158,7 +171,7 @@ export function Chat() {
               )}
               <PromptForm isBusy={isBusy} onSubmit={send} onStop={() => void stop()} input={draft} setInput={setDraft} inputRef={inputRef} />
             </div>
-            {hasMessages && (
+            {hasConversation && (
               <MessageScrollerButton
                 aria-label="К последнему сообщению"
                 className="static size-11 shrink-0 translate-none data-[active=false]:hidden"
