@@ -61,9 +61,9 @@ function read(key?: string, id = customer.id) {
   }), { params: Promise.resolve({ id }) });
 }
 
-function reply(values: Record<string, string>, cookie?: string, origin = base, id = customer.id) {
+function reply(values: Record<string, string>, cookie?: string, origin = base, id = customer.id, accept?: string) {
   return replyToHandoff(new Request(`${base}/api/manager/handoffs/${id}/reply`, {
-    method: "POST", headers: { Origin: origin, ...(cookie ? { Cookie: cookie } : {}) },
+    method: "POST", headers: { Origin: origin, ...(cookie ? { Cookie: cookie } : {}), ...(accept ? { Accept: accept } : {}) },
     body: new URLSearchParams(values),
   }), { params: Promise.resolve({ id }) });
 }
@@ -120,11 +120,17 @@ try {
   assert.equal((await reply(firstReply, cookie, base, agent.id)).status, 404);
   assert.equal((await reply({ ...firstReply, text: " " }, cookie)).status, 400);
   assert.equal((await reply({ ...firstReply, text: "x".repeat(4001) }, cookie)).status, 400);
+  const invalidReply = await reply({ ...firstReply, text: " " }, cookie, base, customer.id, "application/json");
+  assert.equal(invalidReply.status, 400);
+  assert.deepEqual(await invalidReply.json(), { error: "Введите ответ от 1 до 4000 символов." });
   const posted = await reply(firstReply, cookie);
   assert.equal(posted.status, 303);
   assert.equal(posted.headers.get("location"), `/manager#handoff-${customer.id}`);
   assert.equal((await reply(firstReply, cookie)).status, 303);
   assert.equal((await reply({ ...firstReply, text: "Подмена" }, cookie)).status, 409);
+  const savedReply = await reply(secondReply, cookie, base, customer.id, "application/json");
+  assert.equal(savedReply.status, 201);
+  assert.deepEqual(await savedReply.json(), { id: secondReply.replyId });
   assert.equal((await reply(secondReply, cookie)).status, 303);
   const snapshot = await (await read(readKey)).json();
   assert.deepEqual(Object.keys(snapshot).sort(), ["closedAt", "replies"]);

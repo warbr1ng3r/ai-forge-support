@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { InboxIcon } from "lucide-react";
 
+import { ManagerReplyForm } from "@/components/manager-reply-form";
 import { TextPart } from "@/components/parts/text-part";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { listHandoffs } from "@/lib/handoffs";
 import { managerAccessConfigured, managerCookieName, managerSessionValid } from "@/lib/manager-auth";
 
@@ -146,16 +146,10 @@ export default async function ManagerPage({ searchParams }: {
                       </ol>
                     )}
                     {handoff.canReply && !handoff.closedAt && (
-                      <form action={`/api/manager/handoffs/${handoff.id}/reply${page > 1 ? `?page=${page}` : ""}`} method="post" className="grid gap-2">
-                        <input type="hidden" name="replyId" value={randomUUID()} />
-                        <label className="grid gap-1 text-sm">
-                          Ответ клиенту
-                          <Textarea name="text" maxLength={4000} rows={2} required className="rounded-xl border-border bg-background" />
-                        </label>
-                        <Button type="submit" variant="outline" size="sm" className="min-h-11 justify-self-start">
-                          Отправить ответ
-                        </Button>
-                      </form>
+                      <ManagerReplyForm
+                        action={`/api/manager/handoffs/${handoff.id}/reply${page > 1 ? `?page=${page}` : ""}`}
+                        initialReplyId={randomUUID()}
+                      />
                     )}
                   </CardContent>
                 </Card>
