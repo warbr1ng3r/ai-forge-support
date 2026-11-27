@@ -12,6 +12,7 @@ import { StatusIcon } from "@/components/status-icon"
 import { Suggestions } from "@/components/suggestions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Message, MessageContent } from "@/components/ui/message"
 import {
   MessageScroller,
@@ -80,7 +81,19 @@ export function Chat() {
   const lastUserId = messages.findLast(message => message.role === "user")?.id
   const currentHandoffId = lastUserId ? `chat-${lastUserId}` : undefined
   const hasMessages = messages.length > 0
-  const hasConversation = hasMessages || receipts.length > 0
+  const activeHandoffIds = new Set(messages.filter(message => message.role === "user").map(message => `chat-${message.id}`))
+  const activeReceipts = receipts.filter(receipt => activeHandoffIds.has(receipt.id))
+  const previousReceipts = receipts.filter(receipt => !activeHandoffIds.has(receipt.id))
+  const previousHandoffs = previousReceipts.length > 0 && (
+    <Collapsible className="min-w-0">
+      <CollapsibleTrigger render={<Button type="button" variant="outline" size="sm" className="pointer-coarse:min-h-11" />}>
+        Предыдущие обращения · {previousReceipts.length}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-3 pt-3">
+        {previousReceipts.map(receipt => <HandoffReplies key={receipt.id} receipt={receipt} focus={false} />)}
+      </CollapsibleContent>
+    </Collapsible>
+  )
   const waitingForText = isBusy && (lastMessage?.role !== "assistant"
     || !lastMessage.parts.some((part) => part.type === "text" && part.text.trim()))
 
@@ -156,7 +169,7 @@ export function Chat() {
       )}
       <MessageScrollerProvider>
         <MessageScroller className="flex-1">
-          {hasConversation ? (
+          {hasMessages ? (
             <MessageScrollerViewport aria-label="Переписка" className="flex-1 [mask-image:none]">
               <MessageScrollerContent className="chat-column flex flex-col gap-5 py-4 sm:gap-6 sm:py-6">
                 {messages.map((message) => (
@@ -178,7 +191,7 @@ export function Chat() {
                     </Message>
                   </MessageScrollerItem>
                 )}
-                {receipts.map(receipt => (
+                {activeReceipts.map(receipt => (
                   <MessageScrollerItem key={receipt.id} messageId={receipt.id}>
                     <HandoffReplies receipt={receipt} focus={receipt.id === currentHandoffId} />
                   </MessageScrollerItem>
@@ -186,25 +199,27 @@ export function Chat() {
                 {lastUserId && !isBusy && !receipts.some(receipt => receipt.id === currentHandoffId) && (
                   <ChatHandoff key={lastUserId} requestId={lastUserId} messages={messages} onSent={addReceipt} />
                 )}
+                {previousHandoffs}
               </MessageScrollerContent>
             </MessageScrollerViewport>
           ) : (
             <div className="min-h-0 overflow-y-auto">
-              <section className="chat-column pt-5 pb-4 sm:pt-10 sm:pb-5 lg:pt-16" aria-labelledby="welcome-title">
+              <section className="chat-column space-y-3 pt-4 pb-3 sm:pt-10 sm:pb-5 lg:pt-16" aria-labelledby="welcome-title">
                 <div className="grid min-w-0 overflow-hidden rounded-2xl border bg-card lg:grid-cols-[0.95fr_1.05fr]">
-                  <div className="flex flex-col justify-center gap-3 bg-[#1e2c52] p-5 text-[#f3f5ff] sm:gap-4 sm:p-8 dark:bg-[#253657]">
-                    <LayersIcon aria-hidden="true" className="size-6 text-[#c8c5fb]" />
+                  <div className="flex flex-col justify-center gap-3 bg-[#1e2c52] p-4 text-[#f3f5ff] max-sm:[@media(max-height:650px)]:gap-2 max-sm:[@media(max-height:650px)]:p-3 sm:gap-4 sm:p-8 dark:bg-[#253657]">
+                    <LayersIcon aria-hidden="true" className="size-6 text-[#c8c5fb] max-sm:[@media(max-height:650px)]:hidden" />
                     <h2 id="welcome-title" className="max-w-[16ch] text-2xl/[1.08] font-semibold tracking-tight sm:text-4xl lg:text-[2.65rem]">
                       Подберите ПО под вашу задачу
                     </h2>
                     <p className="max-w-[38ch] text-sm/relaxed text-[#dde4fa] sm:text-[15px]">
-                      Назовите продукт или опишите потребность. Помощник сверит варианты лицензий по каталогу Softline.
+                      Назовите продукт или опишите задачу. Помощник сверит лицензии по каталогу Softline.
                     </p>
                   </div>
-                  <div className="min-w-0 p-3 sm:p-5">
+                  <div className="min-w-0 p-2.5 sm:p-5">
                     <Suggestions onSelect={useExample} />
                   </div>
                 </div>
+                {previousHandoffs}
               </section>
             </div>
           )}
@@ -223,7 +238,7 @@ export function Chat() {
               )}
               <PromptForm isBusy={isBusy} onSubmit={send} onStop={() => void stop()} input={draft} setInput={setDraft} inputRef={inputRef} />
             </div>
-            {hasConversation && (
+            {hasMessages && (
               <MessageScrollerButton
                 aria-label="К последнему сообщению"
                 className="static size-11 shrink-0 translate-none data-[active=false]:hidden"

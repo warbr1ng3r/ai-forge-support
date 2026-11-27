@@ -27,9 +27,9 @@ const suggestions = [
 
 export function Suggestions({ onSelect }: { onSelect: (prompt: string) => void }) {
   return (
-    <div className="grid gap-2 sm:gap-3" aria-label="Примеры запросов">
+    <div className="grid gap-2 max-sm:[@media(max-height:650px)]:gap-1.5 sm:gap-3" aria-label="Примеры запросов">
       {suggestions.map(({ label, prompt, example, icon: Icon }) => (
-        <Button key={label} variant="outline" size="lg" className="h-auto min-h-14 w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left whitespace-normal sm:px-4" onClick={() => onSelect(prompt)}>
+        <Button key={label} variant="outline" size="lg" className="h-auto min-h-14 w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left whitespace-normal max-sm:[@media(max-height:650px)]:py-1.5 sm:px-4" onClick={() => onSelect(prompt)}>
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
             <Icon aria-hidden="true" />
           </span>

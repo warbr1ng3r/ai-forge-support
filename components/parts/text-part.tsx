@@ -39,7 +39,7 @@ function ScrollableTable({ children }: { children: ReactNode }) {
       >
         <table
           ref={table}
-          className="w-full! max-w-none! text-sm! has-[tr>:nth-child(5)]:min-w-[44rem] has-[tr>:nth-child(5)]:[&_tr>:first-child]:min-w-56 [&_thead]:bg-muted/60 [&_th]:align-top [&_td]:align-top [&_th]:wrap-break-word [&_td]:wrap-break-word [&_th]:whitespace-normal [&_tr>:first-child]:pl-3"
+          className="w-full! max-w-none! text-sm! has-[tr>:nth-child(5)]:min-w-[44rem] has-[tr>:nth-child(5)]:table-fixed has-[tr>:nth-child(5)]:[&_tr>:first-child]:w-44 sm:has-[tr>:nth-child(5)]:[&_tr>:first-child]:w-56 [&_thead]:bg-muted/60 [&_th]:align-top [&_td]:align-top [&_th]:wrap-break-word [&_td]:wrap-break-word [&_th]:whitespace-normal [&_tr>:first-child]:pl-3"
         >
           {children}
         </table>

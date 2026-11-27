@@ -25,6 +25,8 @@ const quantityLabels = {
   "IP-адрес": "Количество IP-адресов",
 }
 
+const documentInputClassName = "rounded-xl border-input bg-card placeholder:text-muted-foreground pointer-coarse:min-h-11"
+
 export function CommerceDocuments({ offer, quantity }: { offer: CatalogOffer; quantity?: number }) {
   const formId = useId()
   const [pending, setPending] = useState<"quote" | "invoice" | null>(null)
@@ -89,17 +91,17 @@ export function CommerceDocuments({ offer, quantity }: { offer: CatalogOffer; qu
           <fieldset disabled={pending !== null} className="grid min-w-0 gap-3">
             <label className="grid gap-1 text-sm font-medium">
               Покупатель
-              <Input name="buyer" required maxLength={160} autoComplete="organization" placeholder="Название организации" />
+              <Input name="buyer" required maxLength={160} autoComplete="organization" placeholder="Название организации" className={documentInputClassName} />
             </label>
             <label className="grid gap-1 text-sm font-medium">
               ИНН <span className="sr-only">(необязательно)</span>
-              <Input name="buyerInn" inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" maxLength={12} placeholder="Необязательно" />
+              <Input name="buyerInn" inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" maxLength={12} placeholder="Необязательно" className={documentInputClassName} />
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {quantityLabel}
-              <Input name="quantity" type="number" defaultValue={quantity ?? (offer.priceUnit ? undefined : 1)} min={range?.min ?? 1} max={range?.max} step={1} required
-                placeholder={offer.priceUnit ? "Укажите количество" : undefined}
-                aria-describedby={range || isPackage ? `${formId}-quantity` : undefined} />
+              <Input name="quantity" type="number" defaultValue={quantity ?? (offer.priceUnit || range ? undefined : 1)} min={range?.min ?? 1} max={range?.max} step={1} required
+                placeholder={offer.priceUnit || range ? "Укажите количество" : undefined}
+                aria-describedby={range || isPackage ? `${formId}-quantity` : undefined} className={documentInputClassName} />
               {(range || isPackage) && <span id={`${formId}-quantity`} className="text-xs font-normal text-muted-foreground">
                 {range ? `Диапазон тарифа от ${range.min}${range.max === undefined ? "" : ` до ${range.max}`}.`
                   : `В одном пакете до ${offer.maxUsers} пользователей.`}

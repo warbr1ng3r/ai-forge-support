@@ -21,6 +21,7 @@ const offerSchema = z.object({
   quantityBounds: z.object({ min: z.number().int().positive(), max: z.number().int().positive().optional() }).optional(),
   availableInCatalog: z.boolean(),
   maxUsers: z.number().int().positive().nullable(),
+  licenseTerm: z.string().optional(),
   licenseOperation: z.enum(["new", "renewal", "expired_renewal", "upgrade"]).nullable(),
 })
 
@@ -115,6 +116,8 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
                   {[
                     `Позиция ${offer.id}`,
                     offer.licenseOperation && operations[offer.licenseOperation],
+                    offer.licenseTerm && `Срок в карточке: ${offer.licenseTerm}`,
+                    offer.quantityBounds && `Количество по тарифу от ${offer.quantityBounds.min}${offer.quantityBounds.max === undefined ? "" : ` до ${offer.quantityBounds.max}`}`,
                     offer.maxUsers && `До ${offer.maxUsers} польз.`,
                   ].filter(Boolean).join(" · ")}
                 </p>
