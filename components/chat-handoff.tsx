@@ -63,8 +63,13 @@ export function HandoffReplies({ receipt, focus }: { receipt: HandoffReceipt; fo
   useEffect(() => {
     const controller = new AbortController()
     let timer: number | undefined
+    let pending = false
+    let finished = false
 
     async function refresh() {
+      window.clearTimeout(timer)
+      if (document.hidden || pending || finished) return
+      pending = true
       try {
         const response = await fetch(`/api/manager/handoffs/${id}`, {
           headers: { Authorization: `Bearer ${readKey}` },
@@ -72,25 +77,32 @@ export function HandoffReplies({ receipt, focus }: { receipt: HandoffReceipt; fo
           signal: controller.signal,
         })
         if (response.status === 404) {
+          finished = true
           setError("unavailable")
           return
         }
         if (!response.ok) throw new Error("Не удалось обновить обращение")
         const latest: HandoffUpdate = await response.json()
         if (controller.signal.aborted) return
+        finished = Boolean(latest.closedAt)
         setUpdate(latest)
         setError(undefined)
-        if (latest.closedAt) return
       } catch {
         if (!controller.signal.aborted) setError("retrying")
+      } finally {
+        pending = false
+        if (!finished && !document.hidden && !controller.signal.aborted) {
+          timer = window.setTimeout(() => void refresh(), 2000)
+        }
       }
-      if (!controller.signal.aborted) timer = window.setTimeout(() => void refresh(), 2000)
     }
 
     void refresh()
+    document.addEventListener("visibilitychange", refresh)
     return () => {
       controller.abort()
       window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", refresh)
     }
   }, [id, readKey])
 

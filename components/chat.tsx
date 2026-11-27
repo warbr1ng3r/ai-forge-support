@@ -1,9 +1,9 @@
 "use client"
 
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, getToolName, isToolUIPart } from "ai"
+import { DefaultChatTransport, getToolName, isToolUIPart, safeValidateUIMessages } from "ai"
 import { LayersIcon } from "lucide-react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { ChatMessage } from "@/components/chat-message"
 import { ChatHandoff, HandoffReplies, useHandoffReceipts } from "@/components/chat-handoff"
@@ -22,9 +22,12 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 
+const chatStorageKey = "support-chat-history"
+const recentMessageLimit = 16
+
 const transport = new DefaultChatTransport({
   prepareSendMessagesRequest: ({ messages }) => {
-    const recent = messages.slice(-16)
+    const recent = messages.slice(-recentMessageLimit)
     const previousOfferIds = new Set<string>()
     for (const message of [...recent].reverse()) {
       if (message.role !== "assistant") continue
@@ -67,8 +70,9 @@ function errorText(message: string) {
 }
 
 export function Chat() {
-  const { messages, sendMessage, regenerate, status, stop, error, clearError } = useChat({ transport, throttle: 50 })
+  const { messages, setMessages, sendMessage, regenerate, status, stop, error, clearError } = useChat({ transport, throttle: 50 })
   const { receipts, addReceipt } = useHandoffReceipts()
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const [draft, setDraft] = useState("")
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const isBusy = status === "submitted" || status === "streaming"
@@ -79,6 +83,35 @@ export function Chat() {
   const hasConversation = hasMessages || receipts.length > 0
   const waitingForText = isBusy && (lastMessage?.role !== "assistant"
     || !lastMessage.parts.some((part) => part.type === "text" && part.text.trim()))
+
+  useEffect(() => {
+    let active = true
+    async function restoreHistory() {
+      try {
+        const stored = sessionStorage.getItem(chatStorageKey)
+        if (!stored) return
+        const history = await safeValidateUIMessages({ messages: JSON.parse(stored) })
+        if (active && history.success) {
+          setMessages(current => current.length ? current : history.data.slice(-recentMessageLimit))
+        }
+      } catch {
+        // Chat still works if tab storage is unavailable.
+      } finally {
+        if (active) setHistoryLoaded(true)
+      }
+    }
+    void restoreHistory()
+    return () => { active = false }
+  }, [setMessages])
+
+  useEffect(() => {
+    if (!historyLoaded || !messages.length || status === "streaming") return
+    try {
+      sessionStorage.setItem(chatStorageKey, JSON.stringify(messages.slice(-recentMessageLimit)))
+    } catch {
+      // The chat remains usable if the browser cannot save it.
+    }
+  }, [historyLoaded, messages, status])
 
   function send(text: string) {
     if (isBusy) return
@@ -96,12 +129,31 @@ export function Chat() {
     void regenerate()
   }
 
+  function startNewChat() {
+    clearError()
+    setMessages([])
+    setDraft("")
+    try {
+      sessionStorage.removeItem(chatStorageKey)
+    } catch {
+      // Storage may be disabled in this tab.
+    }
+    inputRef.current?.focus()
+  }
+
   return (
     <main className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <p role="status" className="sr-only">
         {status === "submitted" ? "Запрос отправлен" : status === "streaming" ? "Помощник отвечает"
           : status === "ready" && lastMessage?.role === "assistant" ? "Ответ готов" : ""}
       </p>
+      {hasMessages && (
+        <div className="chat-column flex shrink-0 justify-end pt-1">
+          <Button type="button" variant="ghost" size="sm" disabled={isBusy} onClick={startNewChat} className="pointer-coarse:min-h-11">
+            Новый подбор
+          </Button>
+        </div>
+      )}
       <MessageScrollerProvider>
         <MessageScroller className="flex-1">
           {hasConversation ? (
