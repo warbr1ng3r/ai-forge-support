@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { coversQuantityTier, normalizeSearch, openCatalog, quantityTierParameter, rubleTotals, type Offer } from "./catalog.ts";
+import { articleQuantityBounds, coversQuantityTier, normalizeSearch, openCatalog, quantityTierParameter, rubleTotals, type Offer } from "./catalog.ts";
 import { catalogPriceUnit } from "./store-faq.ts";
 
 export const commerceDocumentRequest = z.object({
@@ -36,6 +36,11 @@ function pricingUnit(offer: Offer, quantity: number): { label: string } | { erro
     if (covers === false) return { error: "Количество выходит за пределы тарифа этой позиции." };
     if (covers === undefined) return { error: "Диапазон количества по этому тарифу уточните у магазина." };
     return { label: units[catalogUnit] };
+  }
+
+  const articleBounds = articleQuantityBounds(offer.article);
+  if (articleBounds && (quantity < articleBounds.min || quantity > articleBounds.max)) {
+    return { error: "Количество выходит за пределы тарифа этой позиции." };
   }
 
   const name = normalizeSearch(offer.name);

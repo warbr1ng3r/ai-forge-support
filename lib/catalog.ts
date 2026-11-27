@@ -37,6 +37,15 @@ function toOffer(row: OfferRow, descriptionLimit: number) {
 
 export type Offer = ReturnType<typeof toOffer>;
 
+// The GstarCAD 2027 perpetual SKUs repeat the sales_notes quantity tier in their article.
+export function articleQuantityBounds(article: string) {
+  const match = /^g2027-(?:lt|std|pro)-(?:лок|сет)-пост-([1-9]\d{0,2})-([1-9]\d{0,2})$/iu.exec(article);
+  if (!match) return undefined;
+  const min = Number(match[1]);
+  const max = Number(match[2]);
+  return min <= max ? { min, max } : undefined;
+}
+
 export function quantityBounds(parameters: Record<string, string[]>) {
   const nodes = parameters["К-во узлов"];
   if (nodes?.length && nodes.every(value => /^[1-9]\d*$/u.test(value))) {

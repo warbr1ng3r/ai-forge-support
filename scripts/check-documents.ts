@@ -67,6 +67,20 @@ try {
   assert.match(await documentText(ipQuote), /43 500,00 ₽/u);
   assert.equal((await request({ ...quote, offerId: "143402", quantity: 9 })).status, 422);
   assert.equal((await request({ ...quote, offerId: "3850", quantity: 49 })).status, 422);
+
+  const smallCadQuote = await request({ ...quote, offerId: "532976", quantity: 4 });
+  assert.equal(smallCadQuote.status, 200);
+  assert.match(await documentText(smallCadQuote), /191 600,00 ₽/u);
+  const largeCadInvoice = await request({ ...quote, type: "invoice", offerId: "532973", quantity: 12 });
+  assert.equal(largeCadInvoice.status, 200);
+  assert.match(await documentText(largeCadInvoice), /514 800,00 ₽/u);
+  for (const [offerId, quantity] of [["532973", 4], ["532976", 12]] as const) {
+    const wrongTier = await request({ ...quote, offerId, quantity });
+    assert.equal(wrongTier.status, 422, offerId);
+    assert.equal(wrongTier.headers.get("Content-Disposition"), null, offerId);
+    assert.match(await wrongTier.text(), /Количество выходит за пределы тарифа/u);
+  }
+
   const ambiguousBundle = await request({ ...quote, offerId: "542049", quantity: 1 });
   assert.equal(ambiguousBundle.status, 422);
   assert.match(await ambiguousBundle.text(), /Единицу цены комплекта уточните/);
@@ -83,6 +97,8 @@ try {
     { action: "Сформировано КП", details: { offerId: "100599", count: 1 } },
     { action: "Сформирован проект счёта", details: { offerId: "100599", count: 1 } },
     { action: "Сформировано КП", details: { offerId: "143402", count: 10 } },
+    { action: "Сформировано КП", details: { offerId: "532976", count: 4 } },
+    { action: "Сформирован проект счёта", details: { offerId: "532973", count: 12 } },
   ]);
 
   console.log("Document and event checks passed on the real catalogue snapshot.");

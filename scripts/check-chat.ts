@@ -39,6 +39,50 @@ const promotionQuestion = "У производителя есть специал
 const privatePurchaseQuestion = "Я самозанятый без ИП. Могу купить электронную лицензию как физлицо? Продукт ещё не выбрал.";
 const renewalQuestion = "Проверьте СКАНЕР-ВС 7, позицию 486969. Это продление Enterprise на год и на 2048 активов? Какова цена в каталоге?";
 const bundlePriceQuestion = "ТИМ КРЕДО на 11 рабочих мест, позиции 438375 и 542049. Это цена за весь комплект или за одно место?";
+const packageQuoteQuestion = "Нужен один клиентский компонент Appius PLM для КОМПАС-3D на пять рабочих мест, позиция 499760. Подготовьте демо-КП.";
+const elbrusQuestion = "Нужна «Альт Рабочая станция 10» для Эльбрус-8СВ, артикул ALT10-0900W. Подтвердите цену 10 560 ₽ и наличие.";
+const storePolicyChecks = [
+  {
+    question: "Оплатили счёт после истечения срока. Если платёж не примут, когда ждать возврата денег?",
+    facts: [/на акцепт.*три рабочих дня/, /в течение трёх рабочих дней с получения платежа/, /пяти рабочих дней с даты поступления заявления/],
+    omitted: /Условия возврата коробки/,
+  },
+  {
+    question: "Как вернуть нераспакованное оборудование после получения?",
+    facts: [/Условия возврата коробки/, /семи дней после получения/],
+    omitted: /Акцепт заказа и поздний платёж/,
+  },
+  {
+    question: "Как считается стоимость доставки в пределах МКАД, а как — в десяти километрах за ним?",
+    facts: [/590 ₽.*30 000 ₽/, /790 ₽.*50 000 ₽/, /негабаритных и тяжеловесных/],
+  },
+  {
+    question: "Какие банки отвечают за эквайринг и видит ли магазин реквизиты карты?",
+    facts: [/защищённой странице/, /магазин не получает полные реквизиты карты/, /Сбербанк и ВТБ/],
+  },
+  {
+    question: "Складываются ли промокод и скидка по текущей акции магазина?",
+    facts: [/скидки не суммируются, если условия акции прямо не разрешают/, /срок и распространяться/, /индивидуальную скидку.*менеджером/],
+  },
+  {
+    question: "Нужно отменить доставку фискального накопителя, я пока его не получал. Как отказаться?",
+    facts: [/до получения покупатель может отказаться/, /оплаченного счёта.*причину/],
+    omitted: /Условия возврата коробки/,
+  },
+  {
+    question: "Подлежит ли возврату уже полученный исправный фискальный накопитель?",
+    facts: [/надлежащего качества не подлежит обмену или возврату/, /с дефектом.*через менеджера/],
+    omitted: /Условия возврата коробки/,
+  },
+  {
+    question: "Отправляете тяжёлое оборудование в Пермь? Кто оплачивает доставку и выполняет разгрузку?",
+    facts: [/2–7 рабочих дней/, /составу заказа и региону/, /Разгрузку и подъём.*силами заказчика.*менеджером/],
+  },
+  {
+    question: "Что будет с лицензией организации, если появится правопреемник?",
+    facts: [/организация не может требовать переоформления/, /при реорганизации с правопреемством лицензия продолжает действовать/, /при ликвидации.*теряет силу/],
+  },
+];
 const scopedLicenseChecks = [
   { question: "Позиция 541992 на год. Хватит ли купить восемь лицензий для восьми управляемых компьютеров и 14 сотрудников?", ids: ["541992"], answer: /одного клиента.*сотрудников.*компьютеров.*лицензируемых подключений/u },
   { question: "Локальный RuDesktop на год, позиции 487234, 518158 и 518159. Включены ли подключения в управляющий сервер?", ids: ["487234", "518158", "518159"], answer: /сервер и подключения[^\n]*не подтверждает, сколько подключений включено и требуется ли покупать их отдельно/u },
@@ -59,6 +103,10 @@ globalThis.fetch = async (input, init) => {
     const body = await request.json();
     assert.equal(body.model, "google/gemini-decision-1");
     const { requirements, candidates } = JSON.parse(body.state);
+    if (requirements.includes(packageQuoteQuestion)) {
+      assert.equal(candidates.candidate_1.id, "499760");
+      return Response.json({ answers: { candidate_1: { type: "choice", choice: "fit", confidence: 1 } } });
+    }
     if (requirements.includes(documentFollowUp)) {
       assert.deepEqual(Object.values(candidates).map(candidate => (candidate as { id: string }).id), ["222179", "222182"]);
       return Response.json({ answers: Object.fromEntries(Object.keys(candidates).map(key => [key, { type: "choice", choice: "fit", confidence: 1 }])) });
@@ -86,6 +134,12 @@ globalThis.fetch = async (input, init) => {
   const body = await request.json() as { messages: Array<{ role: string; content: string }>; tool_choice?: string; tools?: unknown[]; max_tokens?: number };
   assert.equal(body.max_tokens, 2048, "Bound the provider's per-call balance reservation");
   const system = body.messages.filter(turn => turn.role === "system").map(turn => turn.content).join("\n");
+  const storePolicy = storePolicyChecks.find(({ question }) => body.messages.some(turn => turn.role === "user" && turn.content.includes(question)));
+  if (storePolicy) {
+    for (const fact of storePolicy.facts) assert.match(system, fact);
+    if (storePolicy.omitted) assert.doesNotMatch(system, storePolicy.omitted);
+    return stream({ content: "Ответ по правилам магазина." }, "stop");
+  }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes(installationQuestion))) {
     return stream({ content: "Уточните, какой продукт и версию устанавливаете и на какой ОС." }, "stop");
   }
@@ -112,6 +166,15 @@ globalThis.fetch = async (input, init) => {
     return stream({ content: "Купить как физлицо можно, если условия позиции это допускают. Уточните название или артикул." }, "stop");
   }
   const tool = body.messages.findLast(turn => turn.role === "tool");
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(packageQuoteQuestion))) {
+    if (tool && JSON.parse(tool.content).candidates) return stream({}, "stop");
+    return stream({ tool_calls: [{
+      index: 0, id: tool ? "fixture_check_package" : "fixture_find_package", type: "function",
+      function: tool
+        ? { name: "verifyFit", arguments: '{"ids":["499760"]}' }
+        : { name: "findOffer", arguments: '{"id":"499760"}' },
+    }] }, "tool_calls");
+  }
   const licenseCheck = scopedLicenseChecks.find(({ question }) => body.messages.some(turn => turn.role === "user" && turn.content.includes(question)));
   if (licenseCheck) {
     assert.equal(tool, undefined, "Exact catalogue evidence should produce a grounded answer without another model step");
@@ -192,6 +255,9 @@ globalThis.fetch = async (input, init) => {
   }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes("ALT10-0900W"))) {
     if (tool) {
+      if (body.messages.some(turn => turn.role === "user" && turn.content.includes(elbrusQuestion))) {
+        return stream({ content: "ARMv8 совместима с Эльбрус-8СВ." }, "stop");
+      }
       const offers = JSON.parse(tool.content).offers;
       if (body.messages.some(turn => turn.role === "user" && turn.content.includes("похожие позиции")) && !offers.length) {
         return stream({ tool_calls: [{
@@ -552,6 +618,13 @@ try {
   assert.match(alternativesStream, /"toolName":"searchCatalog"/);
   assert.match(alternativesStream, /По указанному артикулу совпадений в снимке каталога нет/);
   assert.match(alternativesStream, /Цену и наличие подтвердить не удалось/);
+  const elbrus = await post({ messages: [message("missing-elbrus", "user", elbrusQuestion)] });
+  const elbrusStream = await elbrus.text();
+  assert.match(elbrusStream, /ALT10-0900W совпадений в снимке каталога нет/);
+  assert.match(elbrusStream, /Цену и наличие подтвердить не удалось/);
+  assert.match(elbrusStream, /Эльбрус-8СВ использует e2kv5\. ARMv8 — другая архитектура\./u);
+  assert.match(elbrusStream, /https:\/\/www\.basealt\.ru\/knowledge_base\/Specification_ALT_Server_10\.4\.html/u);
+  assert.doesNotMatch(elbrusStream, /ARMv8 совместима|10 560 ₽|"type":"error"/u);
   const knownSchoolArticle = await post({ messages: [message("known-school-article", "user",
     "Мы школа. Можно ли купить через договор Secret Net Studio 8 «Максимальная защита», электронная лицензия на год, артикул SNS-8.x-BK1-SB-SP1Y?")] });
   assert.equal(knownSchoolArticle.status, 200);
@@ -608,6 +681,7 @@ try {
       availableInCatalog: true,
       maxUsers: null,
       licenseOperation: "renewal",
+      licenseTerm: "12 мес.",
       quantityBounds: { min: 50, max: 99 },
     }],
   }]);
@@ -657,6 +731,15 @@ try {
     assert.match(text, /"finishReason":"stop"/);
     assert.doesNotMatch(text, /"type":"error"|"type":"tool-output-error"/);
   }
+  for (const { question } of storePolicyChecks) {
+    const result = await post({ messages: [message("store-policy", "user", question)] });
+    assert.match(await result.text(), /Ответ по правилам магазина/, question);
+  }
+  const packageQuote = await post({ messages: [message("package-quote", "user", packageQuoteQuestion)] });
+  const packageStream = await packageQuote.text();
+  assert.match(packageStream, /"id":"499760","verdict":"fit"/);
+  assert.match(packageStream, /230[\p{Zs}]000 ₽ за одну позицию/u);
+  assert.match(packageStream, /Демо-КП и счёт» в карточке.*количество 1/);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;

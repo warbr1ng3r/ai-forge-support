@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { createUIMessageStreamResponse, type UIMessageChunk } from "ai";
 import { handleChatStream } from "@mastra/ai-sdk";
 import { z } from "zod";
-import { catalogPath, quantityBounds, type Offer } from "../../../lib/catalog.ts";
+import { articleQuantityBounds, catalogPath, quantityBounds, type Offer } from "../../../lib/catalog.ts";
+import { prepareCommerceDocument } from "../../../lib/commerce-documents.ts";
 import { recordConsultation } from "../../../lib/knowledge.ts";
 import { agentId, createSupport, summarizeCatalogGroups } from "../../../lib/support.ts";
 import { catalogPriceUnit } from "../../../lib/store-faq.ts";
@@ -25,11 +26,23 @@ const availabilityQuestion = new RegExp(
   "iu",
 );
 const componentQuestion = /что\s+(?:относится\s+к|входит\s+в)\s+[^.!?\n:;]{1,120}?,?\s+а\s+что\s+(?:[кв]\s|(?:ид[её]т|покупается)\s+отдельно)/iu;
+const documentQuestion = /(?<!\p{L})(?:кп|коммерческ\p{L}*\s+предложени\p{L}*|проект\s+сч[её]та|(?:подготов\p{L}*|выстав\p{L}*|оформ\p{L}*)\s+сч[её]т)(?!\p{L})/iu;
 
-function publicOffer({ id, name, url, price, currency, availableInCatalog, maxUsers, licenseOperation, parameters }: Offer) {
+function verifiedDocumentReply([offer, other]: readonly Offer[]) {
+  if (!offer || other || catalogPriceUnit(offer.name)) return;
+  const pricing = prepareCommerceDocument(offer, 1);
+  if ("error" in pricing) return;
+  const price = (pricing.amount.totalKopecks / 100).toLocaleString("ru-RU");
+  const name = offer.name.replace(/[\r\n*\[\]<>]/g, " ");
+  return `Подтверждена позиция ${offer.id} — ${name}, ${price} ₽ за одну позицию по каталогу. Для демо-документов откройте «Демо-КП и счёт» в карточке. Для одной позиции укажите количество 1.${offer.availableInCatalog ? "" : " Фактическую поставку подтверждает менеджер."}`;
+}
+
+function publicOffer({ id, name, url, price, currency, availableInCatalog, maxUsers, licenseOperation, article, parameters }: Offer) {
   const priceUnit = catalogPriceUnit(name);
-  return { id, name, url, price, currency, priceUnit, availableInCatalog, maxUsers, licenseOperation,
-    quantityBounds: priceUnit ? quantityBounds(parameters) : undefined };
+  const terms = parameters["Срок действия"]?.filter(term => term.trim() && !/^не (?:определено|указан[оа]?)$/iu.test(term.trim()));
+  const licenseTerm = terms?.length === 1 ? terms[0] : undefined;
+  return { id, name, url, price, currency, priceUnit, availableInCatalog, maxUsers, licenseOperation, licenseTerm,
+    quantityBounds: articleQuantityBounds(article) ?? quantityBounds(parameters) };
 }
 
 function forBrowser(chunk: UIMessageChunk, verifiedOffers: readonly Offer[], previousOfferIds: readonly string[]): UIMessageChunk {
@@ -82,6 +95,7 @@ export async function POST(request: Request) {
   const asksAvailability = availabilityQuestion.test(latestText)
     && /\b[a-z][a-z0-9-]{2,}\b/i.test(latestText);
   const asksAboutComponents = componentQuestion.test(latestText);
+  const asksForDocuments = documentQuestion.test(latestText);
   let remaining = 6000;
   const turns: string[] = [];
   for (const message of messages.toReversed()) {
@@ -134,6 +148,9 @@ export async function POST(request: Request) {
               content: [
                 "Сейчас дай итог по полученным данным. У неподтверждённого варианта назови недостающий факт или отличие. Не обещай продолжить поиск.",
                 checked && `Подтверждённые по условиям артикулы: ${checked.filter(candidate => candidate.verdict === "fit").map(candidate => candidate.id).join(", ") || "нет"}. Карточки уже отображают индивидуальную оценку. Запрещено писать, что проверка подтвердила весь список или позиции вне перечисленных ID. Другие варианты только справочные, явно обозначь что по ним неизвестно.`,
+                checked && (verifiedOffers().some(offer => offer.price !== null && offer.price > 0 && /^(?:RUB|RUR)$/u.test(offer.currency))
+                  ? asksForDocuments && "Если есть одна подходящая позиция с ценой в рублях, назови её, цену с единицей тарификации и как открыть демо-документы в карточке. Число мест внутри комплекта не является числом комплектов."
+                  : "В проверенной выдаче нет подходящей позиции с подтверждённой ценой в рублях. Если нужны КП или счёт, предложи уточнить цену у менеджера. Кнопку скачивания не обещай."),
               ].filter(Boolean).join("\n"),
             }],
           };
@@ -184,7 +201,8 @@ export async function POST(request: Request) {
           // A tool-only turn still has a catalog outcome, even if the model stopped without prose.
           const outcome = catalogResult ? (constrainedAnswer ?? (verifiedFit ? undefined : catalogGap(answerAfterResult.trim()))
             ?? (answerAfterResult.trim() ? ""
-            : verifiedFit ? "Подходящие по проверенным условиям позиции отмечены в выдаче."
+            : verifiedFit ? ((asksForDocuments ? verifiedDocumentReply(verifiedOffers()) : undefined)
+              ?? "Подходящие по проверенным условиям позиции отмечены в выдаче.")
             : "В каталоге не удалось подтвердить подходящую позицию по заданным условиям.")) : undefined;
           const delta = [outcome, ...answerNotes(answerAfterResult)].filter(Boolean).join("\n\n");
           if (delta) {
