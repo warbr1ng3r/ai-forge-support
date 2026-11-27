@@ -26,22 +26,22 @@ const availabilityQuestion = new RegExp(
 );
 const componentQuestion = /что\s+(?:относится\s+к|входит\s+в)\s+[^.!?\n:;]{1,120}?,?\s+а\s+что\s+(?:[кв]\s|(?:ид[её]т|покупается)\s+отдельно)/iu;
 
-function forBrowser(chunk: UIMessageChunk): UIMessageChunk {
+function publicOffer({ id, name, url, price, currency, availableInCatalog, maxUsers, licenseOperation, parameters }: Offer) {
+  const priceUnit = catalogPriceUnit(name);
+  return { id, name, url, price, currency, priceUnit, availableInCatalog, maxUsers, licenseOperation,
+    quantityBounds: priceUnit ? quantityBounds(parameters) : undefined };
+}
+
+function forBrowser(chunk: UIMessageChunk, verifiedOffers: readonly Offer[], previousOfferIds: readonly string[]): UIMessageChunk {
   if (chunk.type !== "tool-output-available" || !chunk.output || typeof chunk.output !== "object") return chunk;
   const output = chunk.output;
   if ("offers" in output && Array.isArray(output.offers)) {
-    return { ...chunk, output: { offers: (output.offers as Offer[]).map(
-      ({ id, name, url, price, currency, availableInCatalog, maxUsers, licenseOperation, parameters }) => {
-        const priceUnit = catalogPriceUnit(name);
-        return { id, name, url, price, currency, priceUnit, availableInCatalog, maxUsers, licenseOperation,
-          quantityBounds: priceUnit ? quantityBounds(parameters) : undefined };
-      },
-    ) } };
+    return { ...chunk, output: { offers: (output.offers as Offer[]).map(publicOffer) } };
   }
   if ("candidates" in output && Array.isArray(output.candidates)) {
-    return { ...chunk, output: { candidates: output.candidates.map(
-      ({ id, verdict }: { id: string; verdict: string }) => ({ id, verdict }),
-    ) } };
+    const candidates = output.candidates.map(({ id, verdict }: { id: string; verdict: string }) => ({ id, verdict }));
+    const offers = verifiedOffers.filter(offer => previousOfferIds.includes(offer.id)).map(publicOffer);
+    return { ...chunk, output: { candidates, ...(offers.length ? { offers } : {}) } };
   }
   return chunk;
 }
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
             hasAnswer = true;
           }
         }
-        controller.enqueue(forBrowser(chunk));
+        controller.enqueue(forBrowser(chunk, verifiedOffers(), previousOfferIds));
       },
       flush(controller) {
         try {

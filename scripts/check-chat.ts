@@ -32,6 +32,7 @@ const messages = [
   message("2", "assistant", "Пакет на 50 мест. Вы точно хотите 50?"),
   message("3", "user", "Исправление: нужно 60 мест. Этот пакет подойдёт?"),
 ];
+const documentFollowUp = "Подготовьте черновик КП для продления на 65 рабочих станций.";
 const endpoint = "http://localhost/api/chat";
 const post = (body: unknown) => POST(new Request(endpoint, { method: "POST", body: JSON.stringify(body) }));
 
@@ -45,6 +46,10 @@ globalThis.fetch = async (input, init) => {
     const body = await request.json();
     assert.equal(body.model, "google/gemini-decision-1");
     const { requirements, candidates } = JSON.parse(body.state);
+    if (requirements.includes(documentFollowUp)) {
+      assert.deepEqual(Object.values(candidates).map(candidate => (candidate as { id: string }).id), ["222179", "222182"]);
+      return Response.json({ answers: Object.fromEntries(Object.keys(candidates).map(key => [key, { type: "choice", choice: "fit", confidence: 1 }])) });
+    }
     if (requirements.includes("Альт Виртуализация 11")) {
       assert.deepEqual(Object.values(candidates).map(candidate => (candidate as { id: string }).id), ["496948", "496952", "496967", "496968"]);
       return Response.json({ answers: Object.fromEntries(Object.keys(candidates).map(key => [key, { type: "choice", choice: "fit", confidence: 1 }])) });
@@ -67,6 +72,15 @@ globalThis.fetch = async (input, init) => {
   chatCalls++;
   const body = await request.json() as { messages: Array<{ role: string; content: string }>; tool_choice?: string; tools?: unknown[] };
   const system = body.messages.filter(turn => turn.role === "system").map(turn => turn.content).join("\n");
+  if (body.messages.some(turn => turn.role === "user" && turn.content.includes(documentFollowUp))) {
+    if (body.messages.some(turn => turn.role === "tool")) {
+      return stream({ content: "Для подходящей позиции можно скачать черновик КП." }, "stop");
+    }
+    return stream({ tool_calls: [{
+      index: 0, id: "fixture_verify_document", type: "function",
+      function: { name: "verifyFit", arguments: '{"ids":["222182","222179"]}' },
+    }] }, "tool_calls");
+  }
   if (body.messages.some(turn => turn.role === "user" && turn.content.includes("банковским переводом"))) {
     assert.match(system, /Юрлица и ИП могут платить банковским переводом/);
     assert.match(system, /https:\/\/store\.softline\.ru\/delivery_info\//);
@@ -491,6 +505,31 @@ try {
   assert.match(revisedTierStream, /Для пересчёта нужна цена за узел по тарифу нового объёма/);
   const educationPrice = await post({ messages: [message("academic-price", "user", "Учреждению образования полагается академическая цена?")] });
   assert.match(await educationPrice.text(), /Менеджер магазина подскажет, какой документ подтвердит образовательный статус/);
+  const previousChatCalls = chatCalls;
+  const previousDecisionCalls = decisionCalls;
+  const document = await post({ messages: [message("document-follow-up", "user", documentFollowUp)],
+    previousOfferIds: ["222182", "222179", "19579"] });
+  const documentStream = await document.text();
+  const toolOutputs = documentStream.split("\n")
+    .filter(line => line.startsWith("data: {\"type\":\"tool-output-available\""))
+    .map(line => JSON.parse(line.slice(6)).output);
+  assert.deepEqual(toolOutputs, [{
+    candidates: [{ id: "222179", verdict: "contradiction" }, { id: "222182", verdict: "fit" }],
+    offers: [{
+      id: "222182",
+      name: "Kaspersky Endpoint Security Cloud продление на 1 год по количеству рабочих станций/файловых серверов",
+      url: "https://store.softline.ru/kaspersky/kl4742raqfr-222182/",
+      price: 1896.3,
+      currency: "RUR",
+      priceUnit: "рабочую станцию или файловый сервер",
+      availableInCatalog: true,
+      maxUsers: null,
+      licenseOperation: "renewal",
+      quantityBounds: { min: 50, max: 99 },
+    }],
+  }]);
+  assert.equal(chatCalls - previousChatCalls, 2);
+  assert.equal(decisionCalls - previousDecisionCalls, 1);
   console.log("Chat smoke: hard constraints, discovery, empty result, SKU, FAQ, stream projection and payload limits passed.");
 } finally {
   globalThis.fetch = originalFetch;

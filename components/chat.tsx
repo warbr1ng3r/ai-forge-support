@@ -31,7 +31,7 @@ const transport = new DefaultChatTransport({
       for (const part of [...message.parts].reverse()) {
         if (previousOfferIds.size === 12) break
         if (!isToolUIPart(part) || part.state !== "output-available") continue
-        if (!["searchCatalog", "discoverCatalog", "findOffer"].includes(getToolName(part))) continue
+        if (!["searchCatalog", "discoverCatalog", "findOffer", "verifyFit"].includes(getToolName(part))) continue
         const output = part.output
         if (!output || typeof output !== "object" || !("offers" in output) || !Array.isArray(output.offers)) continue
         for (const offer of output.offers) {

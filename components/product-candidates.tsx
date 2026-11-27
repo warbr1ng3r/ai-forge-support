@@ -65,16 +65,17 @@ export function ProductCandidates({ parts, allowDocuments = false }: { parts: UI
     const result = part.output
     if (tool === "verifyFit") {
       const checked = assessmentSchema.safeParse(result)
-      if (checked.success) {
-        for (const { id, verdict } of checked.data.candidates) assessments.set(id, verdict)
-      }
+      if (!checked.success) continue
+      for (const { id, verdict } of checked.data.candidates) assessments.set(id, verdict)
+    } else if (!["searchCatalog", "discoverCatalog", "findOffer"].includes(tool)) {
       continue
     }
-    if (!["searchCatalog", "discoverCatalog", "findOffer"].includes(tool)) continue
     if (!result || typeof result !== "object" || !("offers" in result) || !Array.isArray(result.offers)) continue
     for (const value of result.offers) {
       const offer = offerSchema.safeParse(value)
-      if (offer.success) found.set(offer.data.id, offer.data)
+      if (offer.success && (tool !== "verifyFit" || assessments.get(offer.data.id) === "fit")) {
+        found.set(offer.data.id, offer.data)
+      }
     }
   }
 

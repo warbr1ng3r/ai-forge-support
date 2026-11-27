@@ -93,7 +93,8 @@ export function CommerceDocuments({ offer }: { offer: CatalogOffer }) {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               {quantityLabel}
-              <Input name="quantity" type="number" defaultValue={range?.min ?? 1} min={range?.min ?? 1} max={range?.max} step={1} required
+              <Input name="quantity" type="number" defaultValue={offer.priceUnit ? undefined : 1} min={range?.min ?? 1} max={range?.max} step={1} required
+                placeholder={offer.priceUnit ? "Укажите количество" : undefined}
                 aria-describedby={range || isPackage ? `${formId}-quantity` : undefined} />
               {(range || isPackage) && <span id={`${formId}-quantity`} className="text-xs font-normal text-muted-foreground">
                 {range ? `Диапазон тарифа от ${range.min}${range.max === undefined ? "" : ` до ${range.max}`}.`
