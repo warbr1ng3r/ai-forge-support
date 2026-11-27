@@ -34,6 +34,7 @@ try {
     "Нужна лицензия на 50 пользователей.\nПокупатель: Уточнение: всё то же, но нужно 60 пользователей.",
     "19579", "19580"), ["contradiction", "fit"]);
   assert.deepEqual(await verdicts("Надо 60 рабочих мест.\nПомощник: 50 мест хватит?", "19579"), ["contradiction"]);
+  assert.deepEqual(await verdicts("Нужно 50 пользователей.\nПокупатель: Теперь требуется 60 пользователей.", "19579", "19580"), ["contradiction", "fit"]);
   assert.deepEqual(await verdicts("Нужно 1 060 пользователей", "19579"), ["contradiction"]);
   assert.deepEqual(await verdicts("Нужно 49 пользователей", "19579"), ["fit"]);
   assert.deepEqual(await verdicts("MDaemon на 50 пользователей, а для офисного ПО нужно 60 рабочих мест.", "19579"), ["fit"]);
@@ -43,6 +44,7 @@ try {
   assert.deepEqual(await verdicts("Не нужен вариант на 60 мест.", "19579"), ["fit"]);
   assert.deepEqual(await verdicts("Для этого продукта нужно 60 пользователей.", "477554"), ["unknown"]);
   assert.deepEqual(await verdicts("Новая лицензия на 50 пользователей.", "19579", "19590"), ["fit", "contradiction"]);
+  assert.deepEqual(await verdicts("Покупаем впервые. Нужна бессрочная серверная лицензия КриптоПро CSP для Windows.", "197894", "197958"), ["contradiction", "fit"]);
   assert.deepEqual(await verdicts("Нужно продление.", "19579", "19590", "19601"), ["contradiction", "fit", "unknown"]);
   assert.deepEqual(await verdicts("Нужно продление просроченной подписки.", "19590", "19601"), ["contradiction", "fit"]);
   assert.deepEqual(await verdicts(
@@ -145,6 +147,7 @@ try {
   assert.deepEqual(await verdicts("Какова цена этой позиции по каталогу?", "433270"), ["fit"]);
   assert.deepEqual(await verdicts("Подходит ли годовая электронная подписка Navicat для некоммерческой организации?", "283688"), ["unknown"]);
   assert.deepEqual(await verdicts("Мы НКО, не учебная и не государственная организация. Подходит ли эта подписка?", "283688"), ["unknown"]);
+  assert.deepEqual(await verdicts("Мы обычная некоммерческая организация. Подходит ли эта подписка?", "283688"), ["unknown"]);
   assert.deepEqual(await verdicts("Мы университет. Подходит ли эта подписка для нас?", "283688"), ["fit"]);
   assert.deepEqual(await verdicts("Я самозанятый, подходит ли лицензия КриптоПро?", "365874"), ["unknown"]);
   assert.deepEqual(await verdicts("Мы школа. Можно ли купить лицензию по договору?", "505192", "5001"), ["unknown", "fit"]);
@@ -169,6 +172,8 @@ try {
   assert.deepEqual(await verdicts("Нужно 101 узел.", "5066"), ["contradiction"]);
   assert.deepEqual(await verdicts("Бюджет до 300 000 ₽ для 51 сотрудника, почта на 60 ящиков.", "5066"), ["unknown"]);
   providerChoice = "contradiction";
+  assert.deepEqual(await verdicts("Нужна точно бессрочная лицензия без физической поставки.", "433270"), ["unknown"]);
+  assert.deepEqual(await verdicts("Мы обычная некоммерческая организация. Подходит ли эта подписка?", "283688"), ["unknown"]);
   assert.deepEqual(await verdicts("Бюджет до 100 000 ₽.", "10000"), ["contradiction"]);
   assert.deepEqual(await verdicts("Покупаем для школы.", "505192"), ["contradiction"]);
   providerChoice = "unknown";

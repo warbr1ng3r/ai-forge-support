@@ -65,7 +65,7 @@ function readQuantity(text: string, unit: RegExp) {
   if (option.test(text) || /(?:^|[^\p{L}])не\s+(?:нуж\p{L}*|надо|хотим)(?!\p{L})/u.test(text)) return null;
   const prefix = text.slice(0, matches[0].index);
   if (/(?:^|[^\p{L}])(?:не более|не больше|до|не|(?:было|была)\s+на)\s*$/u.test(prefix)) return null;
-  const requestsQuantity = !prefix || /надо|нуж|хотим|подбер|подойд|поддерж|рассчита|рассматрива/u.test(text) ||
+  const requestsQuantity = !prefix || /надо|нуж|требу|хотим|подбер|подойд|поддерж|рассчита|рассматрива/u.test(text) ||
     /(?:^|[^\p{L}])(?:на|для|не менее|всего|итого)\s*$/u.test(prefix);
   if (!requestsQuantity) return undefined;
   return singleValue(matches.map(match => Number(match[1].replaceAll(" ", ""))));
@@ -111,7 +111,9 @@ const institutionalBuyer = new RegExp(String.raw`${buyerContext}(?:${school}|${i
 const academicOrStateBuyer = new RegExp(
   String.raw`${buyerContext}(?:${school}|(?:образовательн|государственн|муниципальн|бюджетн)\p{L}*\s+(?:учреждени|организаци)\p{L}*)(?!\p{L})`, "u",
 );
-const nonprofitBuyer = new RegExp(String.raw`${buyerContext}(?:нко|некоммерческ\p{L}*\s+организаци\p{L}*)(?!\p{L})`, "u");
+const nonprofitBuyer = new RegExp(
+  String.raw`${buyerContext}(?:(?:обычн|частн|благотворительн)\p{L}*\s+)?(?:нко|некоммерческ\p{L}*\s+организаци\p{L}*)(?!\p{L})`, "u",
+);
 
 function readBuyer(text: string) {
   if (/(?:^|[^\p{L}])самозанят\p{L}*(?!\p{L})/u.test(text) && !/(?:как|в качестве)\s+ип(?!\p{L})/u.test(text)) {
@@ -324,6 +326,8 @@ function hardConstraints(requirements: string, candidates: Candidate[]) {
     const amount = billedQuantity === null ? undefined : rubleTotals(candidate.price, candidate.currency, billedQuantity);
     const price = amount ? amount.totalKopecks / 100 : null;
     const expiredStatusUnknown = operation === "renewal" && candidate.licenseOperation === "expired_renewal";
+    const licenseTypes = candidate.parameters["Тип лицензии"] ?? [];
+    const updatesOnly = licenseTypes.length > 0 && licenseTypes.every(type => /^(?:обновление|апгрейд|upgrade)$/iu.test(type.trim()));
     const buyers = candidate.parameters["Пользователь"] ?? [];
     const legalEntityOnly = buyers.length > 0 && buyers.every(value => /^(?:юрлицо|юридическое лицо)$/iu.test(value.trim()));
     const personOnly = buyers.length > 0 && buyers.every(value => /^(?:физлицо|физическое лицо)$/iu.test(value.trim()));
@@ -347,19 +351,22 @@ function hardConstraints(requirements: string, candidates: Candidate[]) {
       (standardCsp && isCspTls(candidate.name)) ||
       differentDeployment ||
       (capacity !== undefined && candidate.maxUsers !== null && candidate.maxUsers < capacity) ||
+      (operation === "new" && updatesOnly) ||
       (operation !== undefined && candidate.licenseOperation !== null && candidate.licenseOperation !== operation && !expiredStatusUnknown) ||
       (duration !== undefined && months !== undefined && months !== duration) ||
       (budget !== undefined && price !== null && price > budget)
     ) return "contradiction";
     if (
-      extendsExisting ||
-      astraLevelInName === null ||
-      missingAstraGuestRights(guestVms, candidate) ||
       unresolvedClientRightCoverage(requirements, candidate) ||
       unresolvedServerConnectionBundle(requirements, candidate) ||
       (asksTerm && conflicts.term) ||
       (asksDelivery && conflicts.delivery) ||
-      (seeksGenericNonprofit && specificInstitutionOnly) ||
+      (seeksGenericNonprofit && specificInstitutionOnly)
+    ) return "unresolvedEvidence";
+    if (
+      extendsExisting ||
+      astraLevelInName === null ||
+      missingAstraGuestRights(guestVms, candidate) ||
       (buyer === "self-employed" && (legalEntityOnly || unspecifiedBuyer || commercialOnly && !buyers.some(value => /самозанят/iu.test(value)))) ||
       (buyer === "institution" && commercialOnly) ||
       (tierQuantity !== undefined && matchesTier === undefined) ||
@@ -419,7 +426,8 @@ export async function assessFit(
     candidates: keys.map((key, index) => {
       const { choice, confidence } = parsed.data.answers[key];
       const constraint = constraints[index];
-      const verdict = constraint === "contradiction" || choice === "fit" && constraint === "unknown" ? constraint : choice;
+      const verdict = constraint === "contradiction" ? "contradiction"
+        : constraint === "unresolvedEvidence" || choice === "fit" && constraint === "unknown" ? "unknown" : choice;
       return { id: candidates[index].id, verdict, confidence: verdict === choice ? confidence : 1 };
     }),
     costRub: parsed.data.usage?.cost_rub,
